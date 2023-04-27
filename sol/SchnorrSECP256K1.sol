@@ -143,7 +143,7 @@ contract SchnorrSECP256K1 {
       // y value."
       (pubKeyYParity == 0) ? 27 : 28,
       bytes32(signingPubKeyX),
-      bytes32(Q - mulmod(msgChallenge, signingPubKeyX, Q)));
+      bytes32(mulmod(msgChallenge, signingPubKeyX, Q)));
     return nonceTimesGeneratorAddress == recoveredAddress;
   }
 }

@@ -1381,6 +1381,7 @@ dependencies = [
 [[package]]
 name = "frost-core"
 version = "0.2.0"
+source = "git+https://github.com/zcashfoundation/frost#dad04f46ee22cf868bc269af6c13459d682b5195"
 dependencies = [
  "byteorder",
  "criterion",
@@ -1410,6 +1411,7 @@ dependencies = [
 [[package]]
 name = "frost-secp256k1"
 version = "0.2.0"
+source = "git+https://github.com/zcashfoundation/frost#dad04f46ee22cf868bc269af6c13459d682b5195"
 dependencies = [
  "frost-core",
  "k256",

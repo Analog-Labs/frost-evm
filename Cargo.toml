@@ -9,6 +9,9 @@ name = "tss-sol-demo"
 version = "0.1.0"
 edition = "2021"
 
+[build-dependencies]
+anyhow = "1.0.70"
+
 [dependencies]
 anyhow = "1.0.70"
 frost-evm = { version = "0.1.0", path = "./frost" }
@@ -25,10 +28,8 @@ rosetta-docker = "0.1.0"
 tokio = { version = "1.27.0", features = ["full"] }
 
 [patch.crates-io]
+frost-core = { git = "https://github.com/zcashfoundation/frost" }
+frost-secp256k1 = { git = "https://github.com/zcashfoundation/frost" }
 rosetta-client = { path = "../chain-connectors/rosetta-client" }
 rosetta-config-ethereum = { path = "../chain-connectors/chains/ethereum/config" }
 rosetta-docker = { path = "../chain-connectors/rosetta-docker" }
-frost-core = { path = "../frost/frost-core" }
-frost-secp256k1 = { path = "../frost/frost-secp256k1" }
-#frost-core = { git = "https://github.com/zcashfoundation/frost" }
-#frost-secp256k1 = { git = "https://github.com/zcashfoundation/frost" }

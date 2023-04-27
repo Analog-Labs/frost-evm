@@ -82,7 +82,7 @@ impl VerifyingKey {
             return Err(Error::InvalidSignature);
         }
         let e = challenge(signature.address, &self.to_element(), msg);
-        let n_times_g = AffinePoint::GENERATOR * signature.z - pubkey * e;
+        let n_times_g = AffinePoint::GENERATOR * signature.z + pubkey * e;
         let address = to_address(n_times_g);
         if address != signature.address {
             return Err(Error::InvalidSignature);
@@ -135,7 +135,7 @@ pub mod round2 {
             binding_factor,
             lambda_i,
             key_package,
-            Challenge::from_scalar(challenge),
+            Challenge::from_scalar(-challenge),
         );
 
         Ok(signature_share)
