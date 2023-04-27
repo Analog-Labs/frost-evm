@@ -1,95 +1,157 @@
+use anyhow::Result;
+use frost_evm::{Signature, VerifyingKey};
+use k256::elliptic_curve::point::AffineCoordinates;
+use rosetta_client::{EthereumExt, Wallet};
+use sha3::Digest;
+
+pub async fn deploy_verifier(wallet: &Wallet) -> Result<String> {
+    let bytes = hex::decode(include_str!("../sol/SchnorrSECP256K1.bin").trim())?;
+    let response = wallet.eth_deploy_contract(bytes).await?;
+    let receipt = wallet.eth_transaction_receipt(&response.hash).await?;
+    let contract_address = receipt.result["contractAddress"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    Ok(contract_address)
+}
+
+pub async fn verify_sig(
+    wallet: &Wallet,
+    contract_address: &str,
+    public_key: VerifyingKey,
+    message: &[u8],
+    signature: &Signature,
+) -> Result<()> {
+    let pubkey = public_key.to_element().to_affine();
+    let pubkey_x: [u8; 32] = pubkey.x().into();
+    let pubkey_y_parity = pubkey.y_is_odd().unwrap_u8();
+    let message_hash = sha3::Keccak256::digest(message);
+    let response = wallet
+        .eth_view_call(
+            contract_address,
+            "function verifySignature(uint256,uint8,uint256,uint256,address) returns (bool)",
+            &[
+                hex::encode(pubkey_x),
+                hex::encode([pubkey_y_parity]),
+                hex::encode(signature.z.to_bytes()),
+                hex::encode(message_hash),
+                hex::encode(signature.address),
+            ],
+        )
+        .await?;
+    let result: Vec<String> = serde_json::from_value(response.result)?;
+    anyhow::ensure!(result[0] == "true");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use anyhow::Result;
-    use hex_literal::hex;
-    use k256::elliptic_curve::point::AffineCoordinates;
-    use k256::elliptic_curve::sec1::ToEncodedPoint;
-    use k256::{AffinePoint, NonZeroScalar, PublicKey, SecretKey};
-    use rosetta_client::EthereumExt;
+    use super::*;
+    use rand::thread_rng;
     use rosetta_docker::Env;
-    use sha3::Digest;
+    use std::collections::HashMap;
 
-    const SECRET_KEY: [u8; 32] =
-        hex!("5d18fc9fb6494384932af3bda6fe8102c0fa7a26774e22af3993a69e2ca79565");
-    const PUBLIC_KEY: [[u8; 32]; 2] = [
-        hex!("6e071bbc2060bce7bae894019d30bdf606bdc8ddc99d5023c4c73185827aeb01"),
-        hex!("9ed10348aa5cb37be35802226259ec776119bbea355597db176c66a0f94aa183"),
-    ];
-    const MESSAGE_HASH: [u8; 32] =
-        hex!("18f224412c876d8efb2a3fa670837b5ad1347120363c2b310653f610d382729b");
-    const K: [u8; 32] = hex!("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285");
+    fn frost_sign(message: &[u8]) -> Result<(VerifyingKey, Signature)> {
+        let mut rng = thread_rng();
+        let max_signers = 5;
+        let min_signers = 3;
+        let (shares, pubkeys) =
+            frost_evm::keys::keygen_with_dealer(max_signers, min_signers, &mut rng)?;
 
-    fn to_address(pubkey: PublicKey) -> [u8; 20] {
-        let uncompressed = pubkey.as_affine().to_encoded_point(false);
-        let digest = sha3::Keccak256::digest(&uncompressed.as_bytes()[1..]);
-        digest[12..].try_into().unwrap()
+        // Verifies the secret shares from the dealer and store them in a HashMap.
+        // In practice, the KeyPackages must be sent to its respective participants
+        // through a confidential and authenticated channel.
+        let mut key_packages: HashMap<_, _> = HashMap::new();
+
+        for (k, v) in shares {
+            let key_package = frost_evm::keys::KeyPackage::try_from(v)?;
+            key_packages.insert(k, key_package);
+        }
+
+        let mut nonces = HashMap::new();
+        let mut commitments = HashMap::new();
+
+        ////////////////////////////////////////////////////////////////////////////
+        // Round 1: generating nonces and signing commitments for each participant
+        ////////////////////////////////////////////////////////////////////////////
+
+        // In practice, each iteration of this loop will be executed by its respective participant.
+        for participant_index in 1..(min_signers + 1) {
+            let participant_identifier = participant_index.try_into().expect("should be nonzero");
+            // Generate one (1) nonce and one SigningCommitments instance for each
+            // participant, up to _threshold_.
+            let (nonce, commitment) = frost_evm::round1::commit(
+                participant_identifier,
+                key_packages[&participant_identifier].secret_share(),
+                &mut rng,
+            );
+            // In practice, the nonces and commitment must be sent to the coordinator
+            // (or to every other participant if there is no coordinator) using
+            // an authenticated channel.
+            nonces.insert(participant_identifier, nonce);
+            commitments.insert(participant_identifier, commitment);
+        }
+
+        // This is what the signature aggregator / coordinator needs to do:
+        // - decide what message to sign
+        // - take one (unused) commitment per signing participant
+        let mut signature_shares = Vec::new();
+        let comms = commitments.clone().into_values().collect();
+        // In practice, the SigningPackage must be sent to all participants
+        // involved in the current signing (at least min_signers participants),
+        // using an authenticate channel (and confidential if the message is secret).
+        let signing_package = frost_evm::SigningPackage::new(comms, message.to_vec());
+
+        ////////////////////////////////////////////////////////////////////////////
+        // Round 2: each participant generates their signature share
+        ////////////////////////////////////////////////////////////////////////////
+
+        // In practice, each iteration of this loop will be executed by its respective participant.
+        for participant_identifier in nonces.keys() {
+            let key_package = &key_packages[participant_identifier];
+
+            let nonces_to_use = &nonces[participant_identifier];
+
+            // Each participant generates their signature share.
+            let signature_share =
+                frost_evm::round2::sign(&signing_package, nonces_to_use, key_package)?;
+
+            // In practice, the signature share must be sent to the Coordinator
+            // using an authenticated channel.
+            signature_shares.push(signature_share);
+        }
+
+        ////////////////////////////////////////////////////////////////////////////
+        // Aggregation: collects the signing shares from all participants,
+        // generates the final signature.
+        ////////////////////////////////////////////////////////////////////////////
+
+        // Aggregate (also verifies the signature shares)
+        let group_signature =
+            frost_evm::aggregate(&signing_package, &signature_shares[..], &pubkeys)?;
+        let group_public = frost_evm::VerifyingKey::new(pubkeys.group_public)?;
+
+        // Check that the threshold signature can be verified by the group public
+        // key (the verification key).
+        assert!(group_public.verify(message, &group_signature).is_ok());
+
+        Ok((group_public, group_signature))
     }
 
-    async fn verify_sig(
-        i: u8,
-        pubkey_x: [u8; 32],
-        pubkey_y_parity: u8,
-        signature: [u8; 32],
-        message_hash: [u8; 32],
-        nonce_times_generator_address: [u8; 20],
-    ) -> Result<bool> {
+    #[tokio::test]
+    async fn test_frost() -> Result<()> {
+        let message = b"message to sign";
+        let (public_key, signature) = frost_sign(message)?;
+
         let config = rosetta_config_ethereum::config("dev")?;
 
-        let label = format!("verify-sig-{}", i);
-        let env = Env::new(&label, config.clone()).await?;
+        let env = Env::new("verify-sig", config.clone()).await?;
         let faucet = 100 * u128::pow(10, config.currency_decimals);
         let wallet = env.ephemeral_wallet()?;
         wallet.faucet(faucet).await?;
 
-        let bytes = hex::decode(include_str!("../sol/SchnorrSECP256K1.bin").trim())?;
-        let response = wallet.eth_deploy_contract(bytes).await?;
-        let receipt = wallet.eth_transaction_receipt(&response.hash).await?;
-        let contract_address = receipt.result["contractAddress"].as_str().unwrap();
-
-        let response = wallet
-            .eth_view_call(
-                contract_address,
-                "function verifySignature(uint256,uint8,uint256,uint256,address) returns (bool)",
-                &[
-                    hex::encode(pubkey_x),
-                    hex::encode([pubkey_y_parity]),
-                    hex::encode(signature),
-                    hex::encode(message_hash),
-                    hex::encode(nonce_times_generator_address),
-                ],
-            )
-            .await?;
-        let result: Vec<String> = serde_json::from_value(response.result)?;
-        Ok(result[0] == "true")
-    }
-
-    #[tokio::test]
-    async fn test_verify_sig() -> Result<()> {
-        let secret_key = SecretKey::from_bytes(&SECRET_KEY.into())?;
-        let public_key = secret_key.public_key();
-        let pubkey_x: [u8; 32] = public_key.as_affine().x().into();
-        assert_eq!(pubkey_x, PUBLIC_KEY[0]);
-        let pubkey_y_parity = public_key.as_affine().y_is_odd().unwrap_u8();
-        let k = NonZeroScalar::from_repr(K.into()).unwrap();
-        let k_times_g = AffinePoint::from(AffinePoint::GENERATOR * *k);
-        let address = to_address(PublicKey::from_affine(k_times_g)?);
-        let mut e_hasher = sha3::Keccak256::new();
-        e_hasher.update(pubkey_x);
-        e_hasher.update([pubkey_y_parity]);
-        e_hasher.update(MESSAGE_HASH);
-        e_hasher.update(address);
-        let e = NonZeroScalar::from_repr(e_hasher.finalize()).unwrap();
-        let s = k.sub(&e.mul(&secret_key.to_nonzero_scalar())).to_bytes();
-        let result = verify_sig(
-            0,
-            pubkey_x,
-            pubkey_y_parity,
-            s.into(),
-            MESSAGE_HASH,
-            address,
-        )
-        .await?;
-        assert!(result);
+        let contract_address = deploy_verifier(&wallet).await?;
+        verify_sig(&wallet, &contract_address, public_key, message, &signature).await?;
         Ok(())
     }
 }
