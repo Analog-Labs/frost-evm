@@ -2874,6 +2874,7 @@ dependencies = [
 [[package]]
 name = "rosetta-client"
 version = "0.1.1"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "anyhow",
  "dirs-next",
@@ -2899,6 +2900,7 @@ dependencies = [
 [[package]]
 name = "rosetta-config-bitcoin"
 version = "0.1.0"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "anyhow",
  "rosetta-core",
@@ -2907,6 +2909,7 @@ dependencies = [
 [[package]]
 name = "rosetta-config-ethereum"
 version = "0.1.0"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "anyhow",
  "rosetta-core",
@@ -2916,6 +2919,7 @@ dependencies = [
 [[package]]
 name = "rosetta-config-polkadot"
 version = "0.1.0"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "anyhow",
  "rosetta-core",
@@ -2925,6 +2929,7 @@ dependencies = [
 [[package]]
 name = "rosetta-core"
 version = "0.1.0"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2937,6 +2942,7 @@ dependencies = [
 [[package]]
 name = "rosetta-crypto"
 version = "0.1.0"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "anyhow",
  "bech32",
@@ -2960,6 +2966,7 @@ dependencies = [
 [[package]]
 name = "rosetta-docker"
 version = "0.1.0"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "anyhow",
  "docker-api",
@@ -2976,6 +2983,7 @@ dependencies = [
 [[package]]
 name = "rosetta-tx-ethereum"
 version = "0.1.0"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "anyhow",
  "ethabi",
@@ -2989,6 +2997,7 @@ dependencies = [
 [[package]]
 name = "rosetta-tx-polkadot"
 version = "0.1.0"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "anyhow",
  "blake2-rfc",
@@ -3002,6 +3011,7 @@ dependencies = [
 [[package]]
 name = "rosetta-types"
 version = "0.1.0"
+source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
 dependencies = [
  "serde",
  "serde_json",

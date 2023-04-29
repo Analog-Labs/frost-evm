@@ -30,6 +30,6 @@ tokio = { version = "1.27.0", features = ["full"] }
 [patch.crates-io]
 frost-core = { git = "https://github.com/zcashfoundation/frost" }
 frost-secp256k1 = { git = "https://github.com/zcashfoundation/frost" }
-rosetta-client = { path = "../chain-connectors/rosetta-client" }
-rosetta-config-ethereum = { path = "../chain-connectors/chains/ethereum/config" }
-rosetta-docker = { path = "../chain-connectors/rosetta-docker" }
+rosetta-client = { git = "https://github.com/analog-labs/chain-connectors" }
+rosetta-config-ethereum = { git = "https://github.com/analog-labs/chain-connectors" }
+rosetta-docker = { git = "https://github.com/analog-labs/chain-connectors" }
