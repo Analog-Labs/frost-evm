@@ -1405,6 +1405,7 @@ dependencies = [
  "frost-core",
  "frost-secp256k1",
  "k256",
+ "rand_core 0.6.4",
  "sha3",
 ]
 

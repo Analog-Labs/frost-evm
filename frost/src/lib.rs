@@ -11,10 +11,11 @@ use k256::elliptic_curve::point::AffineCoordinates;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::elliptic_curve::{Curve, PrimeField};
 use k256::{AffinePoint, ProjectivePoint, Scalar};
+use rand_core::{CryptoRng, RngCore};
 use sha3::Digest;
 
-pub use frost_secp256k1::{keys, round1};
-pub use frost_secp256k1::{Error, SigningPackage};
+pub use frost_secp256k1::round1;
+pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};
 
 pub struct Signature {
     pub address: [u8; 20],
@@ -91,6 +92,31 @@ impl VerifyingKey {
     }
 }
 
+/// FROST(secp256k1, SHA-256) keys, key generation, key shares.
+pub mod keys {
+    use super::*;
+    use std::collections::HashMap;
+
+    /// Allows all participants' keys to be generated using a central, trusted
+    /// dealer.
+    pub fn keygen_with_dealer<RNG: RngCore + CryptoRng>(
+        max_signers: u16,
+        min_signers: u16,
+        mut rng: RNG,
+    ) -> Result<(HashMap<Identifier, SecretShare>, PublicKeyPackage), Error> {
+        loop {
+            let (shares, pubkey) =
+                frost_core::frost::keys::keygen_with_dealer(max_signers, min_signers, &mut rng)?;
+            if let Err(_) = VerifyingKey::new(pubkey.group_public) {
+                continue;
+            }
+            return Ok((shares, pubkey));
+        }
+    }
+
+    pub use frost_secp256k1::keys::{KeyPackage, PublicKeyPackage, SecretShare};
+}
+
 pub mod round2 {
     use super::*;
 
@@ -111,6 +137,8 @@ pub mod round2 {
         signer_nonces: &SigningNonces,
         key_package: &KeyPackage,
     ) -> Result<SignatureShare, Error> {
+        VerifyingKey::new(key_package.group_public)?;
+
         // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
         // binding factor.
         let binding_factor_list = compute_binding_factor_list(signing_package, &[]);
@@ -140,6 +168,8 @@ pub mod round2 {
 
         Ok(signature_share)
     }
+
+    pub use frost_secp256k1::round2::{SignatureShare, SigningPackage};
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -163,6 +193,8 @@ pub fn aggregate(
     signature_shares: &[SignatureShare],
     pubkeys: &PublicKeyPackage,
 ) -> Result<Signature, Error> {
+    VerifyingKey::new(pubkeys.group_public)?;
+
     // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
     // binding factor.
     let binding_factor_list = compute_binding_factor_list(signing_package, &[]);
