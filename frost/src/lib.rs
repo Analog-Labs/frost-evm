@@ -107,7 +107,7 @@ pub mod keys {
         loop {
             let (shares, pubkey) =
                 frost_core::frost::keys::keygen_with_dealer(max_signers, min_signers, &mut rng)?;
-            if let Err(_) = VerifyingKey::new(pubkey.group_public) {
+            if VerifyingKey::new(pubkey.group_public).is_err() {
                 continue;
             }
             return Ok((shares, pubkey));
@@ -115,6 +115,34 @@ pub mod keys {
     }
 
     pub use frost_secp256k1::keys::{KeyPackage, PublicKeyPackage, SecretShare};
+
+    pub mod dkg {
+        use super::*;
+        pub use frost_secp256k1::keys::dkg::{part1, part2, round1, round2};
+
+        /// Performs the third and final part of the distributed key generation protocol
+        /// for the participant holding the given [`round2::SecretPackage`],
+        /// given the received [`round1::Package`]s and [`round2::Package`]s received from
+        /// the other participants.
+        ///
+        /// It returns the [`KeyPackage`] that has the long-lived key share for the
+        /// participant, and the [`PublicKeyPackage`]s that has public information
+        /// about all participants; both of which are required to compute FROST
+        /// signatures.
+        pub fn part3(
+            round2_secret_package: &round2::SecretPackage,
+            round1_packages: &[round1::Package],
+            round2_packages: &[round2::Package],
+        ) -> Result<(KeyPackage, PublicKeyPackage), Error> {
+            let (secret, pubkey) = frost_secp256k1::keys::dkg::part3(
+                round2_secret_package,
+                round1_packages,
+                round2_packages,
+            )?;
+            VerifyingKey::new(pubkey.group_public)?;
+            Ok((secret, pubkey))
+        }
+    }
 }
 
 pub mod round2 {
@@ -169,7 +197,7 @@ pub mod round2 {
         Ok(signature_share)
     }
 
-    pub use frost_secp256k1::round2::{SignatureShare, SigningPackage};
+    pub use frost_secp256k1::round2::SignatureShare;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -193,8 +221,6 @@ pub fn aggregate(
     signature_shares: &[SignatureShare],
     pubkeys: &PublicKeyPackage,
 ) -> Result<Signature, Error> {
-    VerifyingKey::new(pubkeys.group_public)?;
-
     // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
     // binding factor.
     let binding_factor_list = compute_binding_factor_list(signing_package, &[]);
