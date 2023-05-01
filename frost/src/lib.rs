@@ -17,6 +17,7 @@ use sha3::Digest;
 pub use frost_secp256k1::round1;
 pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Signature {
     pub address: [u8; 20],
     pub z: Scalar,
