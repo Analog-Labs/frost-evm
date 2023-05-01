@@ -94,9 +94,9 @@ checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 
 [[package]]
 name = "anyhow"
-version = "1.0.70"
+version = "1.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7de8ce5e0f9f8d88245311066a578d72b7af3e7088f32783804676302df237e4"
+checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
 
 [[package]]
 name = "arrayref"
@@ -1262,9 +1262,9 @@ dependencies = [
 
 [[package]]
 name = "ethers-core"
-version = "2.0.3"
+version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a5f8f85ba96698eab9a4782ed2215d0979b1981b99f1be0726c200ffdac22f5"
+checksum = "198ea9efa8480fa69f73d31d41b1601dace13d053c6fe4be6f5878d9dfcf0108"
 dependencies = [
  "arrayvec 0.7.2",
  "bytes",
@@ -2873,8 +2873,9 @@ dependencies = [
 
 [[package]]
 name = "rosetta-client"
-version = "0.1.1"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f391b640fca76b3fc06e897747f07d6591bad217ffc5bda073d51c2efd1fa1d0"
 dependencies = [
  "anyhow",
  "dirs-next",
@@ -2899,8 +2900,9 @@ dependencies = [
 
 [[package]]
 name = "rosetta-config-bitcoin"
-version = "0.1.0"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2f516307593c65e005f4a9d041bfa7fdee2f034ac252cd7404e8fb75bc1377c"
 dependencies = [
  "anyhow",
  "rosetta-core",
@@ -2908,8 +2910,9 @@ dependencies = [
 
 [[package]]
 name = "rosetta-config-ethereum"
-version = "0.1.0"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d3d83fb3d109d2909d2ca1e15d970058f388ee4e8d0e2d45133fdba2e0bf3af"
 dependencies = [
  "anyhow",
  "rosetta-core",
@@ -2918,8 +2921,9 @@ dependencies = [
 
 [[package]]
 name = "rosetta-config-polkadot"
-version = "0.1.0"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdbb262a035ad5ed8dde179058680ddc42c5f0c30658a1c227840af25c2d558b"
 dependencies = [
  "anyhow",
  "rosetta-core",
@@ -2928,8 +2932,9 @@ dependencies = [
 
 [[package]]
 name = "rosetta-core"
-version = "0.1.0"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18138fb7dc9395950a8635919850e959680ecc9f2342129187ac4a2b3756d333"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2942,7 +2947,8 @@ dependencies = [
 [[package]]
 name = "rosetta-crypto"
 version = "0.1.0"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1948fa30f1ad8c2ae5241b6859e9b65073fd9c89f721fd930b0f1089e64b110"
 dependencies = [
  "anyhow",
  "bech32",
@@ -2965,8 +2971,9 @@ dependencies = [
 
 [[package]]
 name = "rosetta-docker"
-version = "0.1.0"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dfd6f01368eaa7fd9cb978ab3c42f1122c906ad132d6650c4c85362cf6eaf62"
 dependencies = [
  "anyhow",
  "docker-api",
@@ -2982,8 +2989,9 @@ dependencies = [
 
 [[package]]
 name = "rosetta-tx-ethereum"
-version = "0.1.0"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "034e7c7754fd85f231872ada8d26330219769a1f25b4dbede97192a9f9b815fd"
 dependencies = [
  "anyhow",
  "ethabi",
@@ -2996,8 +3004,9 @@ dependencies = [
 
 [[package]]
 name = "rosetta-tx-polkadot"
-version = "0.1.0"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "178e5436289cda6912f319fe36e4228e1edff05d67f67275c83d804e1d00d683"
 dependencies = [
  "anyhow",
  "blake2-rfc",
@@ -3011,7 +3020,8 @@ dependencies = [
 [[package]]
 name = "rosetta-types"
 version = "0.1.0"
-source = "git+https://github.com/analog-labs/chain-connectors#5d0ab4f06f59ac55284b980eab99a122646b41a1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23e1bfba4b21ad9a0ce557facda35ff34151df8ed24dd84d659ebd49e2c2c6b3"
 dependencies = [
  "serde",
  "serde_json",
@@ -3046,9 +3056,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.37.17"
+version = "0.37.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc809f704c03a812ac71f22456c857be34185cac691a4316f27ab0f633bb9009"
+checksum = "8bbfc1d1c7c40c01715f47d71444744a81669ca84e8b63e25a55e169b1f86433"
 dependencies = [
  "bitflags",
  "errno",
