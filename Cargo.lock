@@ -1381,7 +1381,7 @@ dependencies = [
 [[package]]
 name = "frost-core"
 version = "0.2.0"
-source = "git+https://github.com/dvc94ch/frost?branch=serde#c78046aca6943bcc1575e04b0182271c649dc9a1"
+source = "git+https://github.com/dvc94ch/frost?branch=serde#5fcdebfbb1cfb868efd00c24d8dcd95ea6c9e9be"
 dependencies = [
  "byteorder",
  "criterion",
@@ -1402,22 +1402,25 @@ dependencies = [
 name = "frost-evm"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "crypto-bigint",
  "frost-core",
  "frost-secp256k1",
  "k256",
  "rand_core 0.6.4",
+ "serde",
  "sha3",
 ]
 
 [[package]]
 name = "frost-secp256k1"
 version = "0.2.0"
-source = "git+https://github.com/dvc94ch/frost?branch=serde#c78046aca6943bcc1575e04b0182271c649dc9a1"
+source = "git+https://github.com/dvc94ch/frost?branch=serde#5fcdebfbb1cfb868efd00c24d8dcd95ea6c9e9be"
 dependencies = [
  "frost-core",
  "k256",
  "rand_core 0.6.4",
+ "serde",
  "sha2 0.10.6",
 ]
 

@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use crypto_bigint::ArrayEncoding;
 use frost_core::frost::round2::compute_signature_share;
 use frost_core::frost::{
@@ -27,6 +28,45 @@ impl Signature {
     pub fn new(r: ProjectivePoint, z: Scalar) -> Self {
         let address = to_address(r);
         Self { address, z }
+    }
+
+    pub fn to_bytes(&self) -> [u8; 52] {
+        let mut bytes = [0; 52];
+        bytes[..20].copy_from_slice(&self.address);
+        bytes[20..].copy_from_slice(&self.z.to_bytes());
+        bytes
+    }
+
+    pub fn from_bytes(bytes: [u8; 52]) -> Result<Self> {
+        let mut address = [0; 20];
+        address.copy_from_slice(&bytes[..20]);
+        let field_bytes: &k256::FieldBytes = bytes[20..].try_into()?;
+        let z = Option::from(Scalar::from_repr(*field_bytes)).context("malformed scalar")?;
+        Ok(Self { address, z })
+    }
+}
+
+impl serde::Serialize for Signature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(self.to_bytes().as_ref())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Signature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = Vec::<u8>::deserialize(deserializer)?;
+        let array = bytes
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("invalid byte length"))?;
+        let signature =
+            Self::from_bytes(array).map_err(|err| serde::de::Error::custom(format!("{err}")))?;
+        Ok(signature)
     }
 }
 
