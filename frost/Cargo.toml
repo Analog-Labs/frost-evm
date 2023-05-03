@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.71"
 crypto-bigint = "0.5.2"
-frost-core = { version = "0.2.0", features = ["internals"], git = "https://github.com/dvc94ch/frost", branch = "serde" }
-frost-secp256k1 = { version = "0.2.0", git = "https://github.com/dvc94ch/frost", branch = "serde" }
+frost-core = { version = "0.2.0", features = ["internals"], git = "https://github.com/dvc94ch/frost", branch = "master" }
+frost-secp256k1 = { version = "0.2.0", git = "https://github.com/dvc94ch/frost", branch = "master" }
 k256 = "0.13.1"
 rand_core = "0.6.4"
 serde = { version = "1.0.160", features = ["derive"] }

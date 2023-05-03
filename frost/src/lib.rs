@@ -174,14 +174,17 @@ pub mod keys {
             round2_secret_package: &round2::SecretPackage,
             round1_packages: &[round1::Package],
             round2_packages: &[round2::Package],
-        ) -> Result<(KeyPackage, PublicKeyPackage), Error> {
+        ) -> Result<Option<(KeyPackage, PublicKeyPackage)>, Error> {
             let (secret, pubkey) = frost_secp256k1::keys::dkg::part3(
                 round2_secret_package,
                 round1_packages,
                 round2_packages,
             )?;
-            VerifyingKey::new(pubkey.group_public)?;
-            Ok((secret, pubkey))
+            match VerifyingKey::new(pubkey.group_public) {
+                Ok(_) => Ok(Some((secret, pubkey))),
+                Err(Error::MalformedVerifyingKey) => Ok(None),
+                Err(err) => Err(err),
+            }
         }
     }
 }
