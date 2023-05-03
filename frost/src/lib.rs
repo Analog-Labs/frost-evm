@@ -89,6 +89,7 @@ fn to_address(pubkey: ProjectivePoint) -> [u8; 20] {
     digest[12..].try_into().unwrap()
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct VerifyingKey {
     inner: frost_secp256k1::VerifyingKey,
 }
