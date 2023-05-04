@@ -1,11 +1,9 @@
 use anyhow::Result;
 use frost_evm::{Signature, VerifyingKey};
-use k256::elliptic_curve::point::AffineCoordinates;
 use rosetta_client::{EthereumExt, Wallet};
-use sha3::Digest;
 
 pub async fn deploy_verifier(wallet: &Wallet) -> Result<String> {
-    let bytes = hex::decode(include_str!("../sol/SchnorrSECP256K1.bin").trim())?;
+    let bytes = hex::decode(include_str!("../sol/Schnorr.bin").trim())?;
     let response = wallet.eth_deploy_contract(bytes).await?;
     let receipt = wallet.eth_transaction_receipt(&response.hash).await?;
     let contract_address = receipt.result["contractAddress"]
@@ -22,20 +20,19 @@ pub async fn verify_sig(
     message: &[u8],
     signature: &Signature,
 ) -> Result<()> {
-    let pubkey = public_key.to_element().to_affine();
-    let pubkey_x: [u8; 32] = pubkey.x().into();
-    let pubkey_y_parity = pubkey.y_is_odd().unwrap_u8();
-    let message_hash = sha3::Keccak256::digest(message);
+    let (pubkey_x, pubkey_y_parity) = public_key.to_px_parity();
+    let message_hash = public_key.message_hash(message);
+    let challenge = public_key.hashed_challenge(message_hash, signature.address);
     let response = wallet
         .eth_view_call(
             contract_address,
-            "function verifySignature(uint256,uint8,uint256,uint256,address) returns (bool)",
+            "function verify(uint8,uint256,uint256,uint256,uint256) returns (bool)",
             &[
+                pubkey_y_parity.to_string(),
                 hex::encode(pubkey_x),
-                hex::encode([pubkey_y_parity]),
-                hex::encode(signature.z.to_bytes()),
                 hex::encode(message_hash),
-                hex::encode(signature.address),
+                hex::encode(challenge.to_bytes()),
+                hex::encode(signature.z.to_bytes()),
             ],
         )
         .await?;
@@ -129,7 +126,7 @@ mod tests {
         // Aggregate (also verifies the signature shares)
         let group_signature =
             frost_evm::aggregate(&signing_package, &signature_shares[..], &pubkeys)?;
-        let group_public = frost_evm::VerifyingKey::new(pubkeys.group_public)?;
+        let group_public = frost_evm::VerifyingKey::new(pubkeys.group_public);
 
         // Check that the threshold signature can be verified by the group public
         // key (the verification key).

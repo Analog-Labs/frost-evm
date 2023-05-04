@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use crypto_bigint::ArrayEncoding;
 use frost_core::frost::round2::compute_signature_share;
 use frost_core::frost::{
     compute_binding_factor_list, compute_group_commitment, derive_interpolating_value,
@@ -10,9 +9,8 @@ use frost_secp256k1::round1::SigningNonces;
 use frost_secp256k1::round2::SignatureShare;
 use k256::elliptic_curve::point::AffineCoordinates;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
-use k256::elliptic_curve::{Curve, PrimeField};
+use k256::elliptic_curve::PrimeField;
 use k256::{AffinePoint, ProjectivePoint, Scalar};
-use rand_core::{CryptoRng, RngCore};
 use sha3::Digest;
 
 pub use frost_secp256k1::round1;
@@ -70,19 +68,6 @@ impl<'de> serde::Deserialize<'de> for Signature {
     }
 }
 
-fn challenge(address: [u8; 20], verifying_key: &ProjectivePoint, msg: &[u8]) -> Scalar {
-    let message_hash = sha3::Keccak256::digest(msg);
-    let public_key = verifying_key.to_affine();
-    let pubkey_x: [u8; 32] = public_key.x().into();
-    let pubkey_y_parity = public_key.y_is_odd().unwrap_u8();
-    let mut e_hasher = sha3::Keccak256::new();
-    e_hasher.update(pubkey_x);
-    e_hasher.update([pubkey_y_parity]);
-    e_hasher.update(message_hash);
-    e_hasher.update(address);
-    Scalar::from_repr(e_hasher.finalize()).unwrap()
-}
-
 fn to_address(pubkey: ProjectivePoint) -> [u8; 20] {
     let uncompressed = pubkey.to_affine().to_encoded_point(false);
     let digest = sha3::Keccak256::digest(&uncompressed.as_bytes()[1..]);
@@ -102,30 +87,41 @@ impl std::ops::Deref for VerifyingKey {
     }
 }
 
-const Q: k256::U256 = <k256::Secp256k1 as Curve>::ORDER;
-const HALF_Q: k256::U256 = Q.shr_vartime(1).saturating_add(&k256::U256::ONE);
-
 impl VerifyingKey {
-    pub fn new(inner: frost_secp256k1::VerifyingKey) -> Result<Self, Error> {
-        let pubkey = inner.to_element().to_affine();
-        if pubkey.x() >= HALF_Q.to_be_byte_array() {
-            return Err(Error::MalformedVerifyingKey);
-        }
-        Ok(Self { inner })
+    pub fn new(inner: frost_secp256k1::VerifyingKey) -> Self {
+        Self { inner }
     }
 
-    pub fn verify(&self, msg: &[u8], signature: &Signature) -> Result<(), Error> {
-        const Q: k256::U256 = <k256::Secp256k1 as Curve>::ORDER;
-        const HALF_Q: k256::U256 = Q.shr_vartime(1).saturating_add(&k256::U256::ONE);
-        let pubkey = self.to_element().to_affine();
-        if pubkey.x() >= HALF_Q.to_be_byte_array() {
-            return Err(Error::MalformedVerifyingKey);
-        }
-        if k256::U256::from(&signature.z) >= Q {
-            return Err(Error::InvalidSignature);
-        }
-        let e = challenge(signature.address, &self.to_element(), msg);
-        let n_times_g = AffinePoint::GENERATOR * signature.z + pubkey * e;
+    pub fn to_affine(&self) -> AffinePoint {
+        self.inner.to_element().to_affine()
+    }
+
+    pub fn to_px_parity(&self) -> ([u8; 32], u8) {
+        let affine = self.to_affine();
+        (affine.x().into(), affine.y_is_odd().unwrap_u8() + 27)
+    }
+
+    pub fn message_hash(&self, message: &[u8]) -> [u8; 32] {
+        sha3::Keccak256::digest(message).into()
+    }
+
+    pub fn hashed_challenge(&self, message_hash: [u8; 32], r: [u8; 20]) -> Scalar {
+        let (pubkey_x, pubkey_y_parity) = self.to_px_parity();
+        let mut e_hasher = sha3::Keccak256::new();
+        e_hasher.update(r);
+        e_hasher.update([pubkey_y_parity]);
+        e_hasher.update(pubkey_x);
+        e_hasher.update(message_hash);
+        Scalar::from_repr(e_hasher.finalize()).unwrap()
+    }
+
+    pub fn challenge(&self, message: &[u8], r: [u8; 20]) -> Scalar {
+        self.hashed_challenge(self.message_hash(message), r)
+    }
+
+    pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), Error> {
+        let e = self.challenge(message, signature.address);
+        let n_times_g = AffinePoint::GENERATOR * signature.z - self.inner.to_element() * e;
         let address = to_address(n_times_g);
         if address != signature.address {
             return Err(Error::InvalidSignature);
@@ -136,58 +132,7 @@ impl VerifyingKey {
 
 /// FROST(secp256k1, SHA-256) keys, key generation, key shares.
 pub mod keys {
-    use super::*;
-    use std::collections::HashMap;
-
-    /// Allows all participants' keys to be generated using a central, trusted
-    /// dealer.
-    pub fn keygen_with_dealer<RNG: RngCore + CryptoRng>(
-        max_signers: u16,
-        min_signers: u16,
-        mut rng: RNG,
-    ) -> Result<(HashMap<Identifier, SecretShare>, PublicKeyPackage), Error> {
-        loop {
-            let (shares, pubkey) =
-                frost_core::frost::keys::keygen_with_dealer(max_signers, min_signers, &mut rng)?;
-            if VerifyingKey::new(pubkey.group_public).is_err() {
-                continue;
-            }
-            return Ok((shares, pubkey));
-        }
-    }
-
-    pub use frost_secp256k1::keys::{KeyPackage, PublicKeyPackage, SecretShare};
-
-    pub mod dkg {
-        use super::*;
-        pub use frost_secp256k1::keys::dkg::{part1, part2, round1, round2};
-
-        /// Performs the third and final part of the distributed key generation protocol
-        /// for the participant holding the given [`round2::SecretPackage`],
-        /// given the received [`round1::Package`]s and [`round2::Package`]s received from
-        /// the other participants.
-        ///
-        /// It returns the [`KeyPackage`] that has the long-lived key share for the
-        /// participant, and the [`PublicKeyPackage`]s that has public information
-        /// about all participants; both of which are required to compute FROST
-        /// signatures.
-        pub fn part3(
-            round2_secret_package: &round2::SecretPackage,
-            round1_packages: &[round1::Package],
-            round2_packages: &[round2::Package],
-        ) -> Result<Option<(KeyPackage, PublicKeyPackage)>, Error> {
-            let (secret, pubkey) = frost_secp256k1::keys::dkg::part3(
-                round2_secret_package,
-                round1_packages,
-                round2_packages,
-            )?;
-            match VerifyingKey::new(pubkey.group_public) {
-                Ok(_) => Ok(Some((secret, pubkey))),
-                Err(Error::MalformedVerifyingKey) => Ok(None),
-                Err(err) => Err(err),
-            }
-        }
-    }
+    pub use frost_secp256k1::keys::*;
 }
 
 pub mod round2 {
@@ -210,8 +155,6 @@ pub mod round2 {
         signer_nonces: &SigningNonces,
         key_package: &KeyPackage,
     ) -> Result<SignatureShare, Error> {
-        VerifyingKey::new(key_package.group_public)?;
-
         // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
         // binding factor.
         let binding_factor_list = compute_binding_factor_list(signing_package, &[]);
@@ -224,10 +167,9 @@ pub mod round2 {
         let lambda_i = derive_interpolating_value(key_package.identifier(), signing_package)?;
 
         // Compute the per-message challenge.
-        let challenge = challenge(
-            to_address(group_commitment.to_element()),
-            &key_package.group_public.to_element(),
+        let challenge = VerifyingKey::new(key_package.group_public).challenge(
             signing_package.message().as_slice(),
+            to_address(group_commitment.to_element()),
         );
 
         // Compute the Schnorr signature share.
@@ -236,7 +178,7 @@ pub mod round2 {
             binding_factor,
             lambda_i,
             key_package,
-            Challenge::from_scalar(-challenge),
+            Challenge::from_scalar(challenge),
         );
 
         Ok(signature_share)
@@ -289,17 +231,16 @@ pub fn aggregate(
 
     // Verify the aggregate signature
     let verification_result =
-        VerifyingKey::new(pubkeys.group_public)?.verify(signing_package.message(), &signature);
+        VerifyingKey::new(pubkeys.group_public).verify(signing_package.message(), &signature);
 
     // Only if the verification of the aggregate signature failed; verify each share to find the cheater.
     // This approach is more efficient since we don't need to verify all shares
     // if the aggregate signature is valid (which should be the common case).
     if let Err(err) = verification_result {
         // Compute the per-message challenge.
-        let challenge = challenge(
-            to_address(group_commitment.to_element()),
-            &pubkeys.group_public.to_element(),
+        let challenge = VerifyingKey::new(pubkeys.group_public).challenge(
             signing_package.message().as_slice(),
+            to_address(group_commitment.to_element()),
         );
 
         // Verify the signature shares.
