@@ -22,7 +22,6 @@ pub async fn verify_sig(
 ) -> Result<()> {
     let (pubkey_x, pubkey_y_parity) = public_key.to_px_parity();
     let message_hash = public_key.message_hash(message);
-    let challenge = public_key.hashed_challenge(message_hash, signature.address);
     let response = wallet
         .eth_view_call(
             contract_address,
@@ -31,7 +30,7 @@ pub async fn verify_sig(
                 pubkey_y_parity.to_string(),
                 hex::encode(pubkey_x),
                 hex::encode(message_hash),
-                hex::encode(challenge.to_bytes()),
+                hex::encode(signature.e.to_bytes()),
                 hex::encode(signature.z.to_bytes()),
             ],
         )

@@ -18,29 +18,28 @@ pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Signature {
-    pub address: [u8; 20],
+    pub e: Scalar,
     pub z: Scalar,
 }
 
 impl Signature {
-    pub fn new(r: ProjectivePoint, z: Scalar) -> Self {
-        let address = to_address(r);
-        Self { address, z }
+    pub fn new(e: Scalar, z: Scalar) -> Self {
+        Self { e, z }
     }
 
-    pub fn to_bytes(&self) -> [u8; 52] {
-        let mut bytes = [0; 52];
-        bytes[..20].copy_from_slice(&self.address);
-        bytes[20..].copy_from_slice(&self.z.to_bytes());
+    pub fn to_bytes(&self) -> [u8; 64] {
+        let mut bytes = [0; 64];
+        bytes[..32].copy_from_slice(&self.e.to_bytes());
+        bytes[32..].copy_from_slice(&self.z.to_bytes());
         bytes
     }
 
-    pub fn from_bytes(bytes: [u8; 52]) -> Result<Self> {
-        let mut address = [0; 20];
-        address.copy_from_slice(&bytes[..20]);
-        let field_bytes: &k256::FieldBytes = bytes[20..].try_into()?;
-        let z = Option::from(Scalar::from_repr(*field_bytes)).context("malformed scalar")?;
-        Ok(Self { address, z })
+    pub fn from_bytes(bytes: [u8; 64]) -> Result<Self> {
+        let e: &k256::FieldBytes = bytes[..32].try_into()?;
+        let e = Option::from(Scalar::from_repr(*e)).context("malformed scalar")?;
+        let z: &k256::FieldBytes = bytes[32..].try_into()?;
+        let z = Option::from(Scalar::from_repr(*z)).context("malformed scalar")?;
+        Ok(Self { e, z })
     }
 }
 
@@ -68,12 +67,6 @@ impl<'de> serde::Deserialize<'de> for Signature {
     }
 }
 
-fn to_address(pubkey: ProjectivePoint) -> [u8; 20] {
-    let uncompressed = pubkey.to_affine().to_encoded_point(false);
-    let digest = sha3::Keccak256::digest(&uncompressed.as_bytes()[1..]);
-    digest[12..].try_into().unwrap()
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct VerifyingKey {
     inner: frost_secp256k1::VerifyingKey,
@@ -92,7 +85,7 @@ impl VerifyingKey {
         Self { inner }
     }
 
-    pub fn to_affine(&self) -> AffinePoint {
+    fn to_affine(&self) -> AffinePoint {
         self.inner.to_element().to_affine()
     }
 
@@ -105,25 +98,28 @@ impl VerifyingKey {
         sha3::Keccak256::digest(message).into()
     }
 
-    pub fn hashed_challenge(&self, message_hash: [u8; 32], r: [u8; 20]) -> Scalar {
+    fn hashed_challenge(&self, message_hash: [u8; 32], r: ProjectivePoint) -> Scalar {
+        let uncompressed = r.to_affine().to_encoded_point(false);
+        let digest = sha3::Keccak256::digest(&uncompressed.as_bytes()[1..]);
+        let address_r: [u8; 20] = digest[12..].try_into().unwrap();
+
         let (pubkey_x, pubkey_y_parity) = self.to_px_parity();
         let mut e_hasher = sha3::Keccak256::new();
-        e_hasher.update(r);
+        e_hasher.update(address_r);
         e_hasher.update([pubkey_y_parity]);
         e_hasher.update(pubkey_x);
         e_hasher.update(message_hash);
         Scalar::from_repr(e_hasher.finalize()).unwrap()
     }
 
-    pub fn challenge(&self, message: &[u8], r: [u8; 20]) -> Scalar {
+    fn challenge(&self, message: &[u8], r: ProjectivePoint) -> Scalar {
         self.hashed_challenge(self.message_hash(message), r)
     }
 
     pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), Error> {
-        let e = self.challenge(message, signature.address);
-        let n_times_g = AffinePoint::GENERATOR * signature.z - self.inner.to_element() * e;
-        let address = to_address(n_times_g);
-        if address != signature.address {
+        let r = AffinePoint::GENERATOR * signature.z - self.inner.to_element() * signature.e;
+        let ep = self.challenge(message, r);
+        if signature.e != ep {
             return Err(Error::InvalidSignature);
         }
         Ok(())
@@ -169,7 +165,7 @@ pub mod round2 {
         // Compute the per-message challenge.
         let challenge = VerifyingKey::new(key_package.group_public).challenge(
             signing_package.message().as_slice(),
-            to_address(group_commitment.to_element()),
+            group_commitment.to_element(),
         );
 
         // Compute the Schnorr signature share.
@@ -227,7 +223,13 @@ pub fn aggregate(
         z += signature_share.signature.z_share;
     }
 
-    let signature = Signature::new(group_commitment.clone().to_element(), z);
+    // Compute the per-message challenge.
+    let challenge = VerifyingKey::new(pubkeys.group_public).challenge(
+        signing_package.message().as_slice(),
+        group_commitment.to_element(),
+    );
+
+    let signature = Signature::new(challenge, z);
 
     // Verify the aggregate signature
     let verification_result =
@@ -237,12 +239,6 @@ pub fn aggregate(
     // This approach is more efficient since we don't need to verify all shares
     // if the aggregate signature is valid (which should be the common case).
     if let Err(err) = verification_result {
-        // Compute the per-message challenge.
-        let challenge = VerifyingKey::new(pubkeys.group_public).challenge(
-            signing_package.message().as_slice(),
-            to_address(group_commitment.to_element()),
-        );
-
         // Verify the signature shares.
         for signature_share in signature_shares {
             // Look up the public key for this signer, where `signer_pubkey` = _G.ScalarBaseMult(s[i])_,
