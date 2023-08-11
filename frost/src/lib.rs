@@ -85,6 +85,10 @@ impl VerifyingKey {
         Self { inner }
     }
 
+    pub fn from_bytes(bytes: [u8; 33]) -> Result<Self> {
+        Ok(Self::new(frost_secp256k1::VerifyingKey::from_bytes(bytes)?))
+    }
+
     fn to_affine(&self) -> AffinePoint {
         self.inner.to_element().to_affine()
     }
