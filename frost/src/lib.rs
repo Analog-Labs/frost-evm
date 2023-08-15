@@ -157,16 +157,16 @@ pub mod round2 {
         signing_package: &SigningPackage,
         signer_nonces: &SigningNonces,
         key_package: &KeyPackage,
-    ) -> Result<SignatureShare> {
+    ) -> Result<SignatureShare, Error> {
         // Validate the signer's commitment is present in the signing package
         let commitment = signing_package
             .signing_commitments()
             .get(key_package.identifier())
-            .context("missing commitment")?;
+            .ok_or(Error::MissingCommitment)?;
 
         // Validate if the signer's commitment exists
         if commitment != &signer_nonces.into() {
-            anyhow::bail!("incorrect commitment");
+            return Err(Error::IncorrectCommitment);
         }
 
         // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
@@ -230,7 +230,7 @@ pub fn aggregate(
     signing_package: &SigningPackage,
     signature_shares: &HashMap<Identifier, SignatureShare>,
     pubkeys: &PublicKeyPackage,
-) -> Result<Signature> {
+) -> Result<Signature, Error> {
     // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
     // binding factor.
     let binding_factor_list =
