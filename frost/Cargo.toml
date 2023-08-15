@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.71"
-frost-core = { version = "0.2.0", features = ["internals"], git = "https://github.com/dvc94ch/frost", branch = "master" }
-frost-secp256k1 = { version = "0.2.0", git = "https://github.com/dvc94ch/frost", branch = "master" }
+anyhow = "1.0.73"
+frost-core = { features = ["internals"], git = "https://github.com/zcashfoundation/frost", branch = "main" }
+frost-secp256k1 = { git = "https://github.com/zcashfoundation/frost", branch = "main" }
 k256 = "0.13.1"
-serde = "1.0.160"
-sha3 = "0.10.7"
+serde = "1.0.183"
+sha3 = "0.10.8"

@@ -45,14 +45,18 @@ mod tests {
     use super::*;
     use rand::thread_rng;
     use rosetta_docker::Env;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
 
     fn frost_sign(message: &[u8]) -> Result<(VerifyingKey, Signature)> {
         let mut rng = thread_rng();
         let max_signers = 5;
         let min_signers = 3;
-        let (shares, pubkeys) =
-            frost_evm::keys::keygen_with_dealer(max_signers, min_signers, &mut rng)?;
+        let (shares, pubkeys) = frost_evm::keys::generate_with_dealer(
+            max_signers,
+            min_signers,
+            frost_evm::keys::IdentifierList::Default,
+            &mut rng,
+        )?;
 
         // Verifies the secret shares from the dealer and store them in a HashMap.
         // In practice, the KeyPackages must be sent to its respective participants
@@ -65,7 +69,7 @@ mod tests {
         }
 
         let mut nonces = HashMap::new();
-        let mut commitments = HashMap::new();
+        let mut commitments = BTreeMap::new();
 
         ////////////////////////////////////////////////////////////////////////////
         // Round 1: generating nonces and signing commitments for each participant
@@ -77,8 +81,10 @@ mod tests {
             // Generate one (1) nonce and one SigningCommitments instance for each
             // participant, up to _threshold_.
             let (nonce, commitment) = frost_evm::round1::commit(
-                participant_identifier,
-                key_packages[&participant_identifier].secret_share(),
+                key_packages
+                    .get(&participant_identifier)
+                    .unwrap()
+                    .secret_share(),
                 &mut rng,
             );
             // In practice, the nonces and commitment must be sent to the coordinator
@@ -91,12 +97,11 @@ mod tests {
         // This is what the signature aggregator / coordinator needs to do:
         // - decide what message to sign
         // - take one (unused) commitment per signing participant
-        let mut signature_shares = Vec::new();
-        let comms = commitments.clone().into_values().collect();
+        let mut signature_shares = HashMap::new();
         // In practice, the SigningPackage must be sent to all participants
         // involved in the current signing (at least min_signers participants),
         // using an authenticate channel (and confidential if the message is secret).
-        let signing_package = frost_evm::SigningPackage::new(comms, message.to_vec());
+        let signing_package = frost_evm::SigningPackage::new(commitments, message);
 
         ////////////////////////////////////////////////////////////////////////////
         // Round 2: each participant generates their signature share
@@ -104,9 +109,9 @@ mod tests {
 
         // In practice, each iteration of this loop will be executed by its respective participant.
         for participant_identifier in nonces.keys() {
-            let key_package = &key_packages[participant_identifier];
+            let key_package = key_packages.get(participant_identifier).unwrap();
 
-            let nonces_to_use = &nonces[participant_identifier];
+            let nonces_to_use = &nonces.get(participant_identifier).unwrap();
 
             // Each participant generates their signature share.
             let signature_share =
@@ -114,7 +119,7 @@ mod tests {
 
             // In practice, the signature share must be sent to the Coordinator
             // using an authenticated channel.
-            signature_shares.push(signature_share);
+            signature_shares.insert(*key_package.identifier(), signature_share);
         }
 
         ////////////////////////////////////////////////////////////////////////////
@@ -123,9 +128,8 @@ mod tests {
         ////////////////////////////////////////////////////////////////////////////
 
         // Aggregate (also verifies the signature shares)
-        let group_signature =
-            frost_evm::aggregate(&signing_package, &signature_shares[..], &pubkeys)?;
-        let group_public = frost_evm::VerifyingKey::new(pubkeys.group_public);
+        let group_signature = frost_evm::aggregate(&signing_package, &signature_shares, &pubkeys)?;
+        let group_public = frost_evm::VerifyingKey::new(*pubkeys.group_public());
 
         // Check that the threshold signature can be verified by the group public
         // key (the verification key).

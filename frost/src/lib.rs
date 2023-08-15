@@ -12,6 +12,7 @@ use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::elliptic_curve::PrimeField;
 use k256::{AffinePoint, ProjectivePoint, Scalar};
 use sha3::Digest;
+use std::collections::HashMap;
 
 pub use frost_secp256k1::round1;
 pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};
@@ -86,7 +87,9 @@ impl VerifyingKey {
     }
 
     pub fn from_bytes(bytes: [u8; 33]) -> Result<Self> {
-        Ok(Self::new(frost_secp256k1::VerifyingKey::from_bytes(bytes)?))
+        Ok(Self::new(frost_secp256k1::VerifyingKey::deserialize(
+            bytes,
+        )?))
     }
 
     fn to_affine(&self) -> AffinePoint {
@@ -149,16 +152,28 @@ pub mod round2 {
     /// Assumes the participant has already determined which nonce corresponds with
     /// the commitment that was assigned by the coordinator in the SigningPackage.
     ///
-    /// [`sign`]: https://www.ietf.org/archive/id/draft-irtf-cfrg-frost-11.html#name-round-two-signature-share-g
+    /// [`sign`]: https://www.ietf.org/archive/id/draft-irtf-cfrg-frost-14.html#name-round-two-signature-share-g
     pub fn sign(
         signing_package: &SigningPackage,
         signer_nonces: &SigningNonces,
         key_package: &KeyPackage,
-    ) -> Result<SignatureShare, Error> {
+    ) -> Result<SignatureShare> {
+        // Validate the signer's commitment is present in the signing package
+        let commitment = signing_package
+            .signing_commitments()
+            .get(key_package.identifier())
+            .context("missing commitment")?;
+
+        // Validate if the signer's commitment exists
+        if commitment != &signer_nonces.into() {
+            anyhow::bail!("incorrect commitment");
+        }
+
         // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
         // binding factor.
-        let binding_factor_list = compute_binding_factor_list(signing_package, &[]);
-        let binding_factor = binding_factor_list[key_package.identifier].clone();
+        let binding_factor_list =
+            compute_binding_factor_list(signing_package, key_package.group_public(), &[]);
+        let binding_factor = binding_factor_list[*key_package.identifier()].clone();
 
         // Compute the group commitment from signing commitments produced in round one.
         let group_commitment = compute_group_commitment(signing_package, &binding_factor_list)?;
@@ -167,10 +182,12 @@ pub mod round2 {
         let lambda_i = derive_interpolating_value(key_package.identifier(), signing_package)?;
 
         // Compute the per-message challenge.
-        let challenge = VerifyingKey::new(key_package.group_public).challenge(
-            signing_package.message().as_slice(),
-            group_commitment.to_element(),
-        );
+        // NOTE: here we diverge from frost by using a different challenge format.
+        let challenge =
+            Challenge::from_scalar(VerifyingKey::new(*key_package.group_public()).challenge(
+                signing_package.message().as_slice(),
+                group_commitment.to_element(),
+            ));
 
         // Compute the Schnorr signature share.
         let signature_share = compute_signature_share(
@@ -178,7 +195,7 @@ pub mod round2 {
             binding_factor,
             lambda_i,
             key_package,
-            Challenge::from_scalar(challenge),
+            challenge,
         );
 
         Ok(signature_share)
@@ -194,6 +211,12 @@ pub mod round2 {
 /// Aggregates the signature shares to produce a final signature that
 /// can be verified with the group public key.
 ///
+/// `signature_shares` maps the identifier of each participant to the
+/// [`round2::SignatureShare`] they sent. These identifiers must come from whatever mapping
+/// the coordinator has between communication channels and participants, i.e.
+/// they must have assurance that the [`round2::SignatureShare`] came from
+/// the participant with that identifier.
+///
 /// This operation is performed by a coordinator that can communicate with all
 /// the signing participants before publishing the final signature. The
 /// coordinator can be one of the participants or a semi-trusted third party
@@ -205,12 +228,13 @@ pub mod round2 {
 /// service attack due to publishing an invalid signature.
 pub fn aggregate(
     signing_package: &SigningPackage,
-    signature_shares: &[SignatureShare],
+    signature_shares: &HashMap<Identifier, SignatureShare>,
     pubkeys: &PublicKeyPackage,
-) -> Result<Signature, Error> {
+) -> Result<Signature> {
     // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
     // binding factor.
-    let binding_factor_list = compute_binding_factor_list(signing_package, &[]);
+    let binding_factor_list =
+        compute_binding_factor_list(signing_package, &pubkeys.group_public(), &[]);
 
     // Compute the group commitment from signing commitments produced in round one.
     let group_commitment = compute_group_commitment(signing_package, &binding_factor_list)?;
@@ -220,15 +244,14 @@ pub fn aggregate(
     //
     // Implements [`aggregate`] from the spec.
     //
-    // [`aggregate`]: https://www.ietf.org/archive/id/draft-irtf-cfrg-frost-11.html#section-5.3
+    // [`aggregate`]: https://www.ietf.org/archive/id/draft-irtf-cfrg-frost-14.html#section-5.3
     let mut z = Scalar::ZERO;
 
-    for signature_share in signature_shares {
-        z += signature_share.signature.z_share;
+    for signature_share in signature_shares.values() {
+        z = z + signature_share.share();
     }
 
-    // Compute the per-message challenge.
-    let challenge = VerifyingKey::new(pubkeys.group_public).challenge(
+    let challenge = VerifyingKey::new(*pubkeys.group_public()).challenge(
         signing_package.message().as_slice(),
         group_commitment.to_element(),
     );
@@ -237,34 +260,34 @@ pub fn aggregate(
 
     // Verify the aggregate signature
     let verification_result =
-        VerifyingKey::new(pubkeys.group_public).verify(signing_package.message(), &signature);
+        VerifyingKey::new(*pubkeys.group_public()).verify(signing_package.message(), &signature);
 
     // Only if the verification of the aggregate signature failed; verify each share to find the cheater.
     // This approach is more efficient since we don't need to verify all shares
     // if the aggregate signature is valid (which should be the common case).
     if let Err(err) = verification_result {
         // Verify the signature shares.
-        for signature_share in signature_shares {
+        for (signature_share_identifier, signature_share) in signature_shares {
             // Look up the public key for this signer, where `signer_pubkey` = _G.ScalarBaseMult(s[i])_,
             // and where s[i] is a secret share of the constant term of _f_, the secret polynomial.
             let signer_pubkey = pubkeys
-                .signer_pubkeys
-                .get(&signature_share.identifier)
+                .signer_pubkeys()
+                .get(signature_share_identifier)
                 .unwrap();
 
             // Compute Lagrange coefficient.
-            let lambda_i =
-                derive_interpolating_value(&signature_share.identifier, signing_package)?;
+            let lambda_i = derive_interpolating_value(signature_share_identifier, signing_package)?;
 
-            let binding_factor = binding_factor_list[signature_share.identifier].clone();
+            let binding_factor = binding_factor_list[*signature_share_identifier].clone();
 
             // Compute the commitment share.
             let r_share = signing_package
-                .signing_commitment(&signature_share.identifier)
+                .signing_commitment(signature_share_identifier)
                 .to_group_commitment_share(&binding_factor);
 
             // Compute relation values to verify this signature share.
             signature_share.verify(
+                *signature_share_identifier,
                 &r_share,
                 signer_pubkey,
                 lambda_i,
@@ -273,7 +296,7 @@ pub fn aggregate(
         }
 
         // We should never reach here; but we return the verification error to be safe.
-        return Err(err);
+        return Err(err.into());
     }
 
     Ok(signature)
