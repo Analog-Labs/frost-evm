@@ -238,7 +238,7 @@ pub fn aggregate(
     // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
     // binding factor.
     let binding_factor_list =
-        compute_binding_factor_list(signing_package, &pubkeys.group_public(), &[]);
+        compute_binding_factor_list(signing_package, pubkeys.group_public(), &[]);
 
     // Compute the group commitment from signing commitments produced in round one.
     let group_commitment = compute_group_commitment(signing_package, &binding_factor_list)?;
@@ -252,7 +252,7 @@ pub fn aggregate(
     let mut z = Scalar::ZERO;
 
     for signature_share in signature_shares.values() {
-        z = z + signature_share.share();
+        z += signature_share.share();
     }
 
     let challenge = VerifyingKey::new(*pubkeys.group_public()).challenge(
@@ -300,7 +300,7 @@ pub fn aggregate(
         }
 
         // We should never reach here; but we return the verification error to be safe.
-        return Err(err.into());
+        return Err(err);
     }
 
     Ok(signature)
