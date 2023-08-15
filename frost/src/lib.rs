@@ -92,6 +92,10 @@ impl VerifyingKey {
         )?))
     }
 
+    pub fn to_bytes(&self) -> [u8; 33] {
+        self.inner.serialize()
+    }
+
     fn to_affine(&self) -> AffinePoint {
         self.inner.to_element().to_affine()
     }
