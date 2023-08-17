@@ -177,7 +177,10 @@ pub mod round2 {
         // binding factor.
         let binding_factor_list =
             compute_binding_factor_list(signing_package, key_package.group_public(), &[]);
-        let binding_factor = binding_factor_list[*key_package.identifier()].clone();
+        let binding_factor = binding_factor_list
+            .get(key_package.identifier())
+            .ok_or(Error::UnknownIdentifier)?
+            .clone();
 
         // Compute the group commitment from signing commitments produced in round one.
         let group_commitment = compute_group_commitment(signing_package, &binding_factor_list)?;
@@ -282,11 +285,15 @@ pub fn aggregate(
             // Compute Lagrange coefficient.
             let lambda_i = derive_interpolating_value(signature_share_identifier, signing_package)?;
 
-            let binding_factor = binding_factor_list[*signature_share_identifier].clone();
+            let binding_factor = binding_factor_list
+                .get(signature_share_identifier)
+                .ok_or(Error::UnknownIdentifier)?
+                .clone();
 
             // Compute the commitment share.
             let r_share = signing_package
                 .signing_commitment(signature_share_identifier)
+                .ok_or(Error::UnknownIdentifier)?
                 .to_group_commitment_share(&binding_factor);
 
             // Compute relation values to verify this signature share.
