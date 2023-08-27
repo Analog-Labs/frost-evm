@@ -14,6 +14,7 @@ use k256::{AffinePoint, ProjectivePoint, Scalar};
 use sha3::Digest;
 use std::collections::HashMap;
 
+pub use frost_secp256k1;
 pub use frost_secp256k1::round1;
 pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};
 
