@@ -10,11 +10,12 @@ use frost_secp256k1::round2::SignatureShare;
 use k256::elliptic_curve::point::AffineCoordinates;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::elliptic_curve::PrimeField;
-use k256::{AffinePoint, ProjectivePoint, Scalar};
+use k256::{AffinePoint, ProjectivePoint};
 use sha3::Digest;
 use std::collections::HashMap;
 
-pub use frost_secp256k1;
+pub type Scalar = frost_core::Scalar<frost_secp256k1::Secp256K1Sha256>;
+
 pub use frost_secp256k1::round1;
 pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};
 
