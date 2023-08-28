@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.73"
-frost-core = { features = ["internals", "serde"], git = "https://github.com/zcashfoundation/frost", branch = "main" }
-frost-secp256k1 = { features = ["serde"], git = "https://github.com/zcashfoundation/frost", branch = "main" }
+frost-core = { features = ["internals", "serde"], git = "https://github.com/dvc94ch/frost", branch = "expose-internals" }
+frost-secp256k1 = { features = ["serde"], git = "https://github.com/dvc94ch/frost", branch = "expose-internals" }
 k256 = "0.13.1"
 serde = "1.0.183"
 sha3 = "0.10.8"

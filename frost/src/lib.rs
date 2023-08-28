@@ -17,6 +17,7 @@ use std::collections::HashMap;
 pub type Scalar = frost_core::Scalar<frost_secp256k1::Secp256K1Sha256>;
 pub type ScalarSerialization = frost_core::ScalarSerialization<frost_secp256k1::Secp256K1Sha256>;
 
+pub use frost_core;
 pub use frost_secp256k1;
 pub use frost_secp256k1::round1;
 pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};

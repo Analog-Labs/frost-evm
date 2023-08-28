@@ -2356,7 +2356,7 @@ dependencies = [
 [[package]]
 name = "frost-core"
 version = "0.6.0"
-source = "git+https://github.com/zcashfoundation/frost?branch=main#87346f4f3ca1295603fcc1f53d6a73812578e5be"
+source = "git+https://github.com/dvc94ch/frost?branch=expose-internals#59acb0f067b5a19fe3dcf0c9cc6955cbfb56e2d4"
 dependencies = [
  "byteorder",
  "criterion",
@@ -2389,7 +2389,7 @@ dependencies = [
 [[package]]
 name = "frost-secp256k1"
 version = "0.6.0"
-source = "git+https://github.com/zcashfoundation/frost?branch=main#87346f4f3ca1295603fcc1f53d6a73812578e5be"
+source = "git+https://github.com/dvc94ch/frost?branch=expose-internals#59acb0f067b5a19fe3dcf0c9cc6955cbfb56e2d4"
 dependencies = [
  "frost-core",
  "k256",
