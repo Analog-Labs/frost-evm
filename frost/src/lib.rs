@@ -19,6 +19,7 @@ pub type ScalarSerialization = frost_core::ScalarSerialization<frost_secp256k1::
 
 pub use frost_secp256k1::round1;
 pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};
+pub use k256::elliptic_curve;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Signature {
