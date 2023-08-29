@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-serde = ["frost-core/serde", "frost-evm-core/serde", "frost-secp256k1/serde"]
+serde = ["frost-core/serde", "frost-secp256k1/serde", "schnorr-evm/serde"]
 
 [dependencies]
 frost-core = { features = ["internals"], git = "https://github.com/dvc94ch/frost", branch = "expose-internals" }
-frost-evm-core = { path = "../core" }
 frost-secp256k1 = { git = "https://github.com/dvc94ch/frost", branch = "expose-internals" }
+schnorr-evm = { path = "../schnorr" }

@@ -1,12 +1,12 @@
 [workspace]
 members = [
-  "core",
   "frost",
+  "schnorr",
 ]
 resolver = "2"
 
 [package]
-name = "tss-sol-demo"
+name = "evm-verifier"
 version = "0.1.0"
 edition = "2021"
 
