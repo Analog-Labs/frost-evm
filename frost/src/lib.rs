@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use frost_core::frost::round2::compute_signature_share;
 use frost_core::frost::{
     compute_binding_factor_list, compute_group_commitment, derive_interpolating_value,
@@ -7,141 +6,17 @@ use frost_core::Challenge;
 use frost_secp256k1::keys::{KeyPackage, PublicKeyPackage};
 use frost_secp256k1::round1::SigningNonces;
 use frost_secp256k1::round2::SignatureShare;
-use k256::elliptic_curve::point::AffineCoordinates;
-use k256::elliptic_curve::sec1::ToEncodedPoint;
-use k256::elliptic_curve::PrimeField;
-use k256::{AffinePoint, ProjectivePoint};
-use sha3::Digest;
 use std::collections::HashMap;
 
 pub type Scalar = frost_core::Scalar<frost_secp256k1::Secp256K1Sha256>;
+#[cfg(feature = "serde")]
 pub type ScalarSerialization = frost_core::ScalarSerialization<frost_secp256k1::Secp256K1Sha256>;
 
 pub use frost_core;
+pub use frost_evm_core::*;
 pub use frost_secp256k1;
 pub use frost_secp256k1::round1;
 pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};
-pub use k256::elliptic_curve;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Signature {
-    pub e: Scalar,
-    pub z: Scalar,
-}
-
-impl Signature {
-    pub fn new(e: Scalar, z: Scalar) -> Self {
-        Self { e, z }
-    }
-
-    pub fn to_bytes(&self) -> [u8; 64] {
-        let mut bytes = [0; 64];
-        bytes[..32].copy_from_slice(&self.e.to_bytes());
-        bytes[32..].copy_from_slice(&self.z.to_bytes());
-        bytes
-    }
-
-    pub fn from_bytes(bytes: [u8; 64]) -> Result<Self> {
-        let e: &k256::FieldBytes = bytes[..32].try_into()?;
-        let e = Option::from(Scalar::from_repr(*e)).context("malformed scalar")?;
-        let z: &k256::FieldBytes = bytes[32..].try_into()?;
-        let z = Option::from(Scalar::from_repr(*z)).context("malformed scalar")?;
-        Ok(Self { e, z })
-    }
-}
-
-impl serde::Serialize for Signature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_bytes(self.to_bytes().as_ref())
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for Signature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = Vec::<u8>::deserialize(deserializer)?;
-        let array = bytes
-            .try_into()
-            .map_err(|_| serde::de::Error::custom("invalid byte length"))?;
-        let signature =
-            Self::from_bytes(array).map_err(|err| serde::de::Error::custom(format!("{err}")))?;
-        Ok(signature)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct VerifyingKey {
-    inner: frost_secp256k1::VerifyingKey,
-}
-
-impl std::ops::Deref for VerifyingKey {
-    type Target = frost_secp256k1::VerifyingKey;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl VerifyingKey {
-    pub fn new(inner: frost_secp256k1::VerifyingKey) -> Self {
-        Self { inner }
-    }
-
-    pub fn from_bytes(bytes: [u8; 33]) -> Result<Self> {
-        Ok(Self::new(frost_secp256k1::VerifyingKey::deserialize(
-            bytes,
-        )?))
-    }
-
-    pub fn to_bytes(&self) -> [u8; 33] {
-        self.inner.serialize()
-    }
-
-    fn to_affine(&self) -> AffinePoint {
-        self.inner.to_element().to_affine()
-    }
-
-    pub fn to_px_parity(&self) -> ([u8; 32], u8) {
-        let affine = self.to_affine();
-        (affine.x().into(), affine.y_is_odd().unwrap_u8() + 27)
-    }
-
-    pub fn message_hash(&self, message: &[u8]) -> [u8; 32] {
-        sha3::Keccak256::digest(message).into()
-    }
-
-    fn hashed_challenge(&self, message_hash: [u8; 32], r: ProjectivePoint) -> Scalar {
-        let uncompressed = r.to_affine().to_encoded_point(false);
-        let digest = sha3::Keccak256::digest(&uncompressed.as_bytes()[1..]);
-        let address_r: [u8; 20] = digest[12..].try_into().unwrap();
-
-        let (pubkey_x, pubkey_y_parity) = self.to_px_parity();
-        let mut e_hasher = sha3::Keccak256::new();
-        e_hasher.update(address_r);
-        e_hasher.update([pubkey_y_parity]);
-        e_hasher.update(pubkey_x);
-        e_hasher.update(message_hash);
-        Scalar::from_repr(e_hasher.finalize()).unwrap()
-    }
-
-    fn challenge(&self, message: &[u8], r: ProjectivePoint) -> Scalar {
-        self.hashed_challenge(self.message_hash(message), r)
-    }
-
-    pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), Error> {
-        let r = AffinePoint::GENERATOR * signature.z - self.inner.to_element() * signature.e;
-        let ep = self.challenge(message, r);
-        if signature.e != ep {
-            return Err(Error::InvalidSignature);
-        }
-        Ok(())
-    }
-}
 
 /// FROST(secp256k1, SHA-256) keys, key generation, key shares.
 pub mod keys {
@@ -196,11 +71,12 @@ pub mod round2 {
 
         // Compute the per-message challenge.
         // NOTE: here we diverge from frost by using a different challenge format.
-        let challenge =
-            Challenge::from_scalar(VerifyingKey::new(*key_package.group_public()).challenge(
+        let challenge = Challenge::from_scalar(
+            VerifyingKey::new(key_package.group_public().to_element()).challenge(
                 signing_package.message().as_slice(),
                 group_commitment.to_element(),
-            ));
+            ),
+        );
 
         // Compute the Schnorr signature share.
         let signature_share = compute_signature_share(
@@ -264,7 +140,8 @@ pub fn aggregate(
         z += signature_share.share();
     }
 
-    let challenge = VerifyingKey::new(*pubkeys.group_public()).challenge(
+    let group_public = VerifyingKey::new(pubkeys.group_public().to_element());
+    let challenge = group_public.challenge(
         signing_package.message().as_slice(),
         group_commitment.to_element(),
     );
@@ -272,8 +149,9 @@ pub fn aggregate(
     let signature = Signature::new(challenge, z);
 
     // Verify the aggregate signature
-    let verification_result =
-        VerifyingKey::new(*pubkeys.group_public()).verify(signing_package.message(), &signature);
+    let verification_result = group_public
+        .verify(signing_package.message(), &signature)
+        .map_err(|_| Error::MalformedSignature);
 
     // Only if the verification of the aggregate signature failed; verify each share to find the cheater.
     // This approach is more efficient since we don't need to verify all shares

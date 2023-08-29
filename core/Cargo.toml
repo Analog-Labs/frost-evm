@@ -1,0 +1,12 @@
+[package]
+name = "frost-evm-core"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+serde = ["dep:serde"]
+
+[dependencies]
+k256 = { version = "0.13.1", default-features = false, features = ["arithmetic"] }
+serde = { version = "1.0.188", optional = true }
+sha3 = { version = "0.10.8", default-features = false }

@@ -1,0 +1,146 @@
+use k256::elliptic_curve::group::prime::PrimeCurveAffine;
+use k256::elliptic_curve::point::AffineCoordinates;
+use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
+use k256::elliptic_curve::PrimeField;
+use k256::{AffinePoint, EncodedPoint, ProjectivePoint, Scalar};
+use sha3::Digest;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Error {
+    InvalidPublicKey,
+    InvalidSignature,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Self::InvalidPublicKey => write!(f, "invalid public key"),
+            Self::InvalidSignature => write!(f, "invalid signature"),
+        }
+    }
+}
+
+pub type Result<T, E = Error> = core::result::Result<T, E>;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Signature {
+    pub e: Scalar,
+    pub z: Scalar,
+}
+
+impl Signature {
+    pub fn new(e: Scalar, z: Scalar) -> Self {
+        Self { e, z }
+    }
+
+    pub fn to_bytes(&self) -> [u8; 64] {
+        let mut bytes = [0; 64];
+        bytes[..32].copy_from_slice(&self.e.to_bytes());
+        bytes[32..].copy_from_slice(&self.z.to_bytes());
+        bytes
+    }
+
+    pub fn from_bytes(bytes: [u8; 64]) -> Result<Self> {
+        let e: &k256::FieldBytes = bytes[..32].try_into().unwrap();
+        let e = Option::from(Scalar::from_repr(*e)).ok_or(Error::InvalidPublicKey)?;
+        let z: &k256::FieldBytes = bytes[32..].try_into().unwrap();
+        let z = Option::from(Scalar::from_repr(*z)).ok_or(Error::InvalidPublicKey)?;
+        Ok(Self { e, z })
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Signature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(self.to_bytes().as_ref())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Signature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = Vec::<u8>::deserialize(deserializer)?;
+        let array = bytes
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("invalid byte length"))?;
+        let signature =
+            Self::from_bytes(array).map_err(|err| serde::de::Error::custom(format!("{err}")))?;
+        Ok(signature)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct VerifyingKey {
+    element: ProjectivePoint,
+}
+
+impl VerifyingKey {
+    pub fn new(element: ProjectivePoint) -> Self {
+        Self { element }
+    }
+
+    pub fn from_bytes(bytes: [u8; 33]) -> Result<Self, Error> {
+        let point = EncodedPoint::from_bytes(bytes).map_err(|_| Error::InvalidPublicKey)?;
+        let point: AffinePoint =
+            Option::from(AffinePoint::from_encoded_point(&point)).ok_or(Error::InvalidPublicKey)?;
+        if point.is_identity().into() {
+            return Err(Error::InvalidPublicKey);
+        }
+        Ok(Self::new(ProjectivePoint::from(point)))
+    }
+
+    pub fn to_bytes(&self) -> Result<[u8; 33], Error> {
+        let point = self.to_affine().to_encoded_point(true);
+        // can only happen if we encode the identity
+        point
+            .as_bytes()
+            .try_into()
+            .map_err(|_| Error::InvalidPublicKey)
+    }
+
+    fn to_affine(&self) -> AffinePoint {
+        self.element.to_affine()
+    }
+
+    pub fn to_px_parity(&self) -> ([u8; 32], u8) {
+        let affine = self.to_affine();
+        (affine.x().into(), affine.y_is_odd().unwrap_u8() + 27)
+    }
+
+    pub fn message_hash(&self, message: &[u8]) -> [u8; 32] {
+        sha3::Keccak256::digest(message).into()
+    }
+
+    fn hashed_challenge(&self, message_hash: [u8; 32], r: ProjectivePoint) -> Scalar {
+        let uncompressed = r.to_affine().to_encoded_point(false);
+        let digest = sha3::Keccak256::digest(&uncompressed.as_bytes()[1..]);
+        let address_r: [u8; 20] = digest[12..].try_into().unwrap();
+
+        let (pubkey_x, pubkey_y_parity) = self.to_px_parity();
+        let mut e_hasher = sha3::Keccak256::new();
+        e_hasher.update(address_r);
+        e_hasher.update([pubkey_y_parity]);
+        e_hasher.update(pubkey_x);
+        e_hasher.update(message_hash);
+        Scalar::from_repr(e_hasher.finalize()).unwrap()
+    }
+
+    pub fn challenge(&self, message: &[u8], r: ProjectivePoint) -> Scalar {
+        self.hashed_challenge(self.message_hash(message), r)
+    }
+
+    pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), Error> {
+        let r = AffinePoint::GENERATOR * signature.z - self.element * signature.e;
+        let ep = self.challenge(message, r);
+        if signature.e != ep {
+            return Err(Error::InvalidSignature);
+        }
+        Ok(())
+    }
+}

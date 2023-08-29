@@ -3,10 +3,10 @@ name = "frost-evm"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+serde = ["frost-core/serde", "frost-evm-core/serde", "frost-secp256k1/serde"]
+
 [dependencies]
-anyhow = "1.0.73"
-frost-core = { features = ["internals", "serde"], git = "https://github.com/dvc94ch/frost", branch = "expose-internals" }
-frost-secp256k1 = { features = ["serde"], git = "https://github.com/dvc94ch/frost", branch = "expose-internals" }
-k256 = "0.13.1"
-serde = "1.0.183"
-sha3 = "0.10.8"
+frost-core = { features = ["internals"], git = "https://github.com/dvc94ch/frost", branch = "expose-internals" }
+frost-evm-core = { path = "../core" }
+frost-secp256k1 = { git = "https://github.com/dvc94ch/frost", branch = "expose-internals" }
