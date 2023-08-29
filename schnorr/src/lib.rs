@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 pub use k256;
 use k256::elliptic_curve::group::prime::PrimeCurveAffine;
 use k256::elliptic_curve::point::AffineCoordinates;
@@ -20,6 +21,9 @@ impl core::fmt::Display for Error {
         }
     }
 }
+
+#[cfg(feature = "std")]
+impl std::error::Error for Error {}
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;
 
