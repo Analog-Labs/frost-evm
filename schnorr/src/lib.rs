@@ -1,3 +1,4 @@
+pub use k256;
 use k256::elliptic_curve::group::prime::PrimeCurveAffine;
 use k256::elliptic_curve::point::AffineCoordinates;
 use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
@@ -75,7 +76,7 @@ impl<'de> serde::Deserialize<'de> for Signature {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VerifyingKey {
     element: ProjectivePoint,
 }
@@ -95,7 +96,7 @@ impl VerifyingKey {
         Ok(Self::new(ProjectivePoint::from(point)))
     }
 
-    pub fn to_bytes(&self) -> Result<[u8; 33], Error> {
+    pub fn to_bytes(self) -> Result<[u8; 33], Error> {
         let point = self.to_affine().to_encoded_point(true);
         // can only happen if we encode the identity
         point
@@ -104,20 +105,24 @@ impl VerifyingKey {
             .map_err(|_| Error::InvalidPublicKey)
     }
 
-    fn to_affine(&self) -> AffinePoint {
+    pub fn to_element(self) -> ProjectivePoint {
+        self.element
+    }
+
+    fn to_affine(self) -> AffinePoint {
         self.element.to_affine()
     }
 
-    pub fn to_px_parity(&self) -> ([u8; 32], u8) {
+    pub fn to_px_parity(self) -> ([u8; 32], u8) {
         let affine = self.to_affine();
         (affine.x().into(), affine.y_is_odd().unwrap_u8() + 27)
     }
 
-    pub fn message_hash(&self, message: &[u8]) -> [u8; 32] {
+    pub fn message_hash(self, message: &[u8]) -> [u8; 32] {
         sha3::Keccak256::digest(message).into()
     }
 
-    fn hashed_challenge(&self, message_hash: [u8; 32], r: ProjectivePoint) -> Scalar {
+    fn hashed_challenge(self, message_hash: [u8; 32], r: ProjectivePoint) -> Scalar {
         let uncompressed = r.to_affine().to_encoded_point(false);
         let digest = sha3::Keccak256::digest(&uncompressed.as_bytes()[1..]);
         let address_r: [u8; 20] = digest[12..].try_into().unwrap();
@@ -131,11 +136,11 @@ impl VerifyingKey {
         Scalar::from_repr(e_hasher.finalize()).unwrap()
     }
 
-    pub fn challenge(&self, message: &[u8], r: ProjectivePoint) -> Scalar {
+    pub fn challenge(self, message: &[u8], r: ProjectivePoint) -> Scalar {
         self.hashed_challenge(self.message_hash(message), r)
     }
 
-    pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), Error> {
+    pub fn verify(self, message: &[u8], signature: &Signature) -> Result<(), Error> {
         let r = AffinePoint::GENERATOR * signature.z - self.element * signature.e;
         let ep = self.challenge(message, r);
         if signature.e != ep {

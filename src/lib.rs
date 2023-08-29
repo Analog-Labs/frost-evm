@@ -129,7 +129,7 @@ mod tests {
 
         // Aggregate (also verifies the signature shares)
         let group_signature = frost_evm::aggregate(&signing_package, &signature_shares, &pubkeys)?;
-        let group_public = frost_evm::VerifyingKey::new(*pubkeys.group_public());
+        let group_public = frost_evm::VerifyingKey::new(pubkeys.group_public().to_element());
 
         // Check that the threshold signature can be verified by the group public
         // key (the verification key).
