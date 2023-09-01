@@ -71,12 +71,11 @@ pub mod round2 {
 
         // Compute the per-message challenge.
         // NOTE: here we diverge from frost by using a different challenge format.
-        let challenge = Challenge::from_scalar(
-            VerifyingKey::new(key_package.group_public().to_element()).challenge(
-                signing_package.message().as_slice(),
-                group_commitment.to_element(),
-            ),
-        );
+        let group_public = VerifyingKey::new(key_package.group_public().to_element());
+        let challenge = Challenge::from_scalar(group_public.challenge(
+            group_public.message_hash(signing_package.message().as_slice()),
+            group_commitment.to_element(),
+        ));
 
         // Compute the Schnorr signature share.
         let signature_share = compute_signature_share(
@@ -142,7 +141,7 @@ pub fn aggregate(
 
     let group_public = VerifyingKey::new(pubkeys.group_public().to_element());
     let challenge = group_public.challenge(
-        signing_package.message().as_slice(),
+        group_public.message_hash(signing_package.message().as_slice()),
         group_commitment.to_element(),
     );
 

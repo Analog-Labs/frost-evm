@@ -47,9 +47,9 @@ impl Signature {
 
     pub fn from_bytes(bytes: [u8; 64]) -> Result<Self> {
         let e: &k256::FieldBytes = bytes[..32].try_into().unwrap();
-        let e = Option::from(Scalar::from_repr(*e)).ok_or(Error::InvalidPublicKey)?;
+        let e = Option::from(Scalar::from_repr(*e)).ok_or(Error::InvalidSignature)?;
         let z: &k256::FieldBytes = bytes[32..].try_into().unwrap();
-        let z = Option::from(Scalar::from_repr(*z)).ok_or(Error::InvalidPublicKey)?;
+        let z = Option::from(Scalar::from_repr(*z)).ok_or(Error::InvalidSignature)?;
         Ok(Self { e, z })
     }
 }
@@ -126,7 +126,7 @@ impl VerifyingKey {
         sha3::Keccak256::digest(message).into()
     }
 
-    fn hashed_challenge(self, message_hash: [u8; 32], r: ProjectivePoint) -> Scalar {
+    pub fn challenge(self, message_hash: [u8; 32], r: ProjectivePoint) -> Scalar {
         let uncompressed = r.to_affine().to_encoded_point(false);
         let digest = sha3::Keccak256::digest(&uncompressed.as_bytes()[1..]);
         let address_r: [u8; 20] = digest[12..].try_into().unwrap();
@@ -140,16 +140,20 @@ impl VerifyingKey {
         Scalar::from_repr(e_hasher.finalize()).unwrap()
     }
 
-    pub fn challenge(self, message: &[u8], r: ProjectivePoint) -> Scalar {
-        self.hashed_challenge(self.message_hash(message), r)
-    }
-
-    pub fn verify(self, message: &[u8], signature: &Signature) -> Result<(), Error> {
+    pub fn verify_prehashed(
+        self,
+        message_hash: [u8; 32],
+        signature: &Signature,
+    ) -> Result<(), Error> {
         let r = AffinePoint::GENERATOR * signature.z - self.element * signature.e;
-        let ep = self.challenge(message, r);
+        let ep = self.challenge(message_hash, r);
         if signature.e != ep {
             return Err(Error::InvalidSignature);
         }
         Ok(())
+    }
+
+    pub fn verify(self, message: &[u8], signature: &Signature) -> Result<(), Error> {
+        self.verify_prehashed(self.message_hash(message), signature)
     }
 }
