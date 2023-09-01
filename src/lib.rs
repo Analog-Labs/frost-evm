@@ -21,7 +21,7 @@ pub async fn verify_sig(
     signature: &Signature,
 ) -> Result<()> {
     let (pubkey_x, pubkey_y_parity) = public_key.to_px_parity();
-    let message_hash = public_key.message_hash(message);
+    let message_hash = VerifyingKey::message_hash(message);
     let response = wallet
         .eth_view_call(
             contract_address,

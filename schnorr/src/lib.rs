@@ -122,7 +122,7 @@ impl VerifyingKey {
         (affine.x().into(), affine.y_is_odd().unwrap_u8() + 27)
     }
 
-    pub fn message_hash(self, message: &[u8]) -> [u8; 32] {
+    pub fn message_hash(message: &[u8]) -> [u8; 32] {
         sha3::Keccak256::digest(message).into()
     }
 
@@ -154,6 +154,6 @@ impl VerifyingKey {
     }
 
     pub fn verify(self, message: &[u8], signature: &Signature) -> Result<(), Error> {
-        self.verify_prehashed(self.message_hash(message), signature)
+        self.verify_prehashed(Self::message_hash(message), signature)
     }
 }
