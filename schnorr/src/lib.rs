@@ -113,18 +113,26 @@ impl SigningKey {
         VerifyingKey::new(AffinePoint::GENERATOR * self.scalar.as_ref())
     }
 
-    pub fn sign_with_rng<R: RngCore + CryptoRng>(&self, rng: &mut R, msg: &[u8]) -> Signature {
+    pub fn sign_prehashed_with_rng<R: RngCore + CryptoRng>(
+        &self,
+        rng: &mut R,
+        hash: [u8; 32],
+    ) -> Signature {
         let k = NonZeroScalar::random(rng);
         let r = AffinePoint::GENERATOR * k.as_ref();
-        let hash = VerifyingKey::message_hash(msg);
         let public = self.public();
         let c = public.challenge(hash, r);
         let z = k.as_ref() + c * self.scalar.as_ref();
         Signature::new(c, z)
     }
 
+    pub fn sign_prehashed(&self, hash: [u8; 32]) -> Signature {
+        self.sign_prehashed_with_rng(&mut OsRng, hash)
+    }
+
     pub fn sign(&self, msg: &[u8]) -> Signature {
-        self.sign_with_rng(&mut OsRng, msg)
+        let hash = VerifyingKey::message_hash(msg);
+        self.sign_prehashed(hash)
     }
 }
 
