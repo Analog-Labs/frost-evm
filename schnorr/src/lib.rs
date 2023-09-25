@@ -100,6 +100,10 @@ impl SigningKey {
         Self::new(&mut rand_core::OsRng)
     }
 
+    pub fn to_scalar(&self) -> NonZeroScalar {
+        self.scalar
+    }
+
     pub fn to_bytes(&self) -> [u8; 32] {
         self.scalar.to_bytes().into()
     }
