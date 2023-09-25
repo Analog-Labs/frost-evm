@@ -6,10 +6,10 @@ edition = "2021"
 [features]
 default = ["std"]
 serde = ["dep:serde"]
-std = []
+std = ["rand_core/getrandom"]
 
 [dependencies]
 k256 = { version = "0.13.1", default-features = false, features = ["arithmetic"] }
-rand_core = { version = "0.6.4", features = ["getrandom"] }
+rand_core = "0.6.4"
 serde = { version = "1.0.188", optional = true }
 sha3 = { version = "0.10.8", default-features = false }

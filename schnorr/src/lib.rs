@@ -5,7 +5,7 @@ use k256::elliptic_curve::point::AffineCoordinates;
 use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use k256::elliptic_curve::PrimeField;
 use k256::{AffinePoint, EncodedPoint, NonZeroScalar, ProjectivePoint, Scalar};
-use rand_core::{CryptoRng, OsRng, RngCore};
+use rand_core::{CryptoRng, RngCore};
 use sha3::Digest;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -95,8 +95,9 @@ impl SigningKey {
         }
     }
 
+    #[cfg(feature = "std")]
     pub fn random() -> Self {
-        Self::new(&mut OsRng)
+        Self::new(&mut rand_core::OsRng)
     }
 
     pub fn to_bytes(&self) -> [u8; 32] {
@@ -126,10 +127,12 @@ impl SigningKey {
         Signature::new(c, z)
     }
 
+    #[cfg(feature = "std")]
     pub fn sign_prehashed(&self, hash: [u8; 32]) -> Signature {
-        self.sign_prehashed_with_rng(&mut OsRng, hash)
+        self.sign_prehashed_with_rng(&mut rand_core::OsRng, hash)
     }
 
+    #[cfg(feature = "std")]
     pub fn sign(&self, msg: &[u8]) -> Signature {
         let hash = VerifyingKey::message_hash(msg);
         self.sign_prehashed(hash)
