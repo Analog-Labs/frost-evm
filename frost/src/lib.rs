@@ -16,6 +16,7 @@ pub use frost_core;
 pub use frost_secp256k1;
 pub use frost_secp256k1::round1;
 pub use frost_secp256k1::{Error, Identifier, SigningKey, SigningPackage};
+pub use schnorr_evm as schnorr;
 pub use schnorr_evm::*;
 
 /// FROST(secp256k1, SHA-256) keys, key generation, key shares.
