@@ -4,11 +4,13 @@ use k256::elliptic_curve::group::prime::PrimeCurveAffine;
 use k256::elliptic_curve::point::AffineCoordinates;
 use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use k256::elliptic_curve::PrimeField;
-use k256::{AffinePoint, EncodedPoint, ProjectivePoint, Scalar};
+use k256::{AffinePoint, EncodedPoint, NonZeroScalar, ProjectivePoint, Scalar};
+use rand_core::{CryptoRng, RngCore};
 use sha3::Digest;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
+    InvalidSecretKey,
     InvalidPublicKey,
     InvalidSignature,
 }
@@ -16,6 +18,7 @@ pub enum Error {
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
+            Self::InvalidSecretKey => write!(f, "invalid secret key"),
             Self::InvalidPublicKey => write!(f, "invalid public key"),
             Self::InvalidSignature => write!(f, "invalid signature"),
         }
@@ -77,6 +80,43 @@ impl<'de> serde::Deserialize<'de> for Signature {
         let signature =
             Self::from_bytes(array).map_err(|err| serde::de::Error::custom(format!("{err}")))?;
         Ok(signature)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct SigningKey {
+    scalar: NonZeroScalar,
+}
+
+impl SigningKey {
+    pub fn new<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        Self {
+            scalar: NonZeroScalar::random(rng),
+        }
+    }
+
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.scalar.to_bytes().into()
+    }
+
+    pub fn from_bytes(bytes: [u8; 32]) -> Result<Self> {
+        let scalar =
+            Option::from(NonZeroScalar::from_repr(bytes.into())).ok_or(Error::InvalidSecretKey)?;
+        Ok(Self { scalar })
+    }
+
+    pub fn public(&self) -> VerifyingKey {
+        VerifyingKey::new(AffinePoint::GENERATOR * self.scalar.as_ref())
+    }
+
+    pub fn sign<R: RngCore + CryptoRng>(&self, rng: &mut R, msg: &[u8]) -> Signature {
+        let k = NonZeroScalar::random(rng);
+        let r = AffinePoint::GENERATOR * k.as_ref();
+        let hash = VerifyingKey::message_hash(msg);
+        let public = self.public();
+        let c = public.challenge(hash, r);
+        let z = k.as_ref() + c * self.scalar.as_ref();
+        Signature::new(c, z)
     }
 }
 
@@ -155,5 +195,19 @@ impl VerifyingKey {
 
     pub fn verify(self, message: &[u8], signature: &Signature) -> Result<(), Error> {
         self.verify_prehashed(Self::message_hash(message), signature)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand_core::OsRng;
+
+    #[test]
+    fn test_sign() {
+        let key = SigningKey::new(&mut OsRng);
+        let public = key.public();
+        let sig = key.sign(&mut OsRng, b"hello world");
+        public.verify(b"hello world", &sig).unwrap();
     }
 }
