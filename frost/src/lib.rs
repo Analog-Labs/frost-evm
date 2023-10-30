@@ -44,6 +44,10 @@ pub mod round2 {
         signer_nonces: &SigningNonces,
         key_package: &KeyPackage,
     ) -> Result<SignatureShare, Error> {
+        if signing_package.signing_commitments().len() < *key_package.min_signers() as usize {
+            return Err(Error::IncorrectNumberOfCommitments);
+        }
+
         // Validate the signer's commitment is present in the signing package
         let commitment = signing_package
             .signing_commitments()
@@ -58,7 +62,7 @@ pub mod round2 {
         // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
         // binding factor.
         let binding_factor_list =
-            compute_binding_factor_list(signing_package, key_package.group_public(), &[]);
+            compute_binding_factor_list(signing_package, key_package.verifying_key(), &[]);
         let binding_factor = binding_factor_list
             .get(key_package.identifier())
             .ok_or(Error::UnknownIdentifier)?
@@ -72,7 +76,7 @@ pub mod round2 {
 
         // Compute the per-message challenge.
         // NOTE: here we diverge from frost by using a different challenge format.
-        let group_public = VerifyingKey::new(key_package.group_public().to_element());
+        let group_public = VerifyingKey::new(key_package.verifying_key().to_element());
         let challenge = Challenge::from_scalar(group_public.challenge(
             VerifyingKey::message_hash(signing_package.message().as_slice()),
             group_commitment.to_element(),
@@ -120,10 +124,21 @@ pub fn aggregate(
     signature_shares: &HashMap<Identifier, SignatureShare>,
     pubkeys: &PublicKeyPackage,
 ) -> Result<Signature, Error> {
+    // Check if signing_package.signing_commitments and signature_shares have
+    // the same set of identifiers, and if they are all in pubkeys.verifying_shares.
+    if signing_package.signing_commitments().len() != signature_shares.len() {
+        return Err(Error::UnknownIdentifier);
+    }
+    if !signing_package.signing_commitments().keys().all(|id| {
+        return signature_shares.contains_key(id) && pubkeys.verifying_shares().contains_key(id);
+    }) {
+        return Err(Error::UnknownIdentifier);
+    }
+
     // Encodes the signing commitment list produced in round one as part of generating [`BindingFactor`], the
     // binding factor.
     let binding_factor_list =
-        compute_binding_factor_list(signing_package, pubkeys.group_public(), &[]);
+        compute_binding_factor_list(signing_package, pubkeys.verifying_key(), &[]);
 
     // Compute the group commitment from signing commitments produced in round one.
     let group_commitment = compute_group_commitment(signing_package, &binding_factor_list)?;
@@ -140,7 +155,7 @@ pub fn aggregate(
         z += signature_share.share();
     }
 
-    let group_public = VerifyingKey::new(pubkeys.group_public().to_element());
+    let group_public = VerifyingKey::new(pubkeys.verifying_key().to_element());
     let challenge = group_public.challenge(
         VerifyingKey::message_hash(signing_package.message().as_slice()),
         group_commitment.to_element(),
@@ -162,7 +177,7 @@ pub fn aggregate(
             // Look up the public key for this signer, where `signer_pubkey` = _G.ScalarBaseMult(s[i])_,
             // and where s[i] is a secret share of the constant term of _f_, the secret polynomial.
             let signer_pubkey = pubkeys
-                .signer_pubkeys()
+                .verifying_shares()
                 .get(signature_share_identifier)
                 .unwrap();
 

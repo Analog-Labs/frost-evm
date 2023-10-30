@@ -1,15 +1,12 @@
 use anyhow::Result;
 use frost_evm::{Signature, VerifyingKey};
-use rosetta_client::{EthereumExt, Wallet};
+use rosetta_client::Wallet;
 
 pub async fn deploy_verifier(wallet: &Wallet) -> Result<String> {
     let bytes = hex::decode(include_str!("../sol/Schnorr.bin").trim())?;
-    let response = wallet.eth_deploy_contract(bytes).await?;
-    let receipt = wallet.eth_transaction_receipt(&response.hash).await?;
-    let contract_address = receipt.result["contractAddress"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    let hash = wallet.eth_deploy_contract(bytes).await?;
+    let receipt = wallet.eth_transaction_receipt(&hash).await?;
+    let contract_address = receipt["contractAddress"].as_str().unwrap().to_owned();
     Ok(contract_address)
 }
 
@@ -33,9 +30,10 @@ pub async fn verify_sig(
                 hex::encode(signature.e.to_bytes()),
                 hex::encode(signature.z.to_bytes()),
             ],
+            None,
         )
         .await?;
-    let result: Vec<String> = serde_json::from_value(response.result)?;
+    let result: Vec<String> = serde_json::from_value(response)?;
     anyhow::ensure!(result[0] == "true");
     Ok(())
 }
@@ -44,7 +42,9 @@ pub async fn verify_sig(
 mod tests {
     use super::*;
     use rand::thread_rng;
+    use rosetta_client::BlockchainConfig;
     use rosetta_docker::Env;
+    use rosetta_server_ethereum::MaybeWsEthereumClient;
     use std::collections::{BTreeMap, HashMap};
 
     fn frost_sign(message: &[u8]) -> Result<(VerifyingKey, Signature)> {
@@ -84,7 +84,7 @@ mod tests {
                 key_packages
                     .get(&participant_identifier)
                     .unwrap()
-                    .secret_share(),
+                    .signing_share(),
                 &mut rng,
             );
             // In practice, the nonces and commitment must be sent to the coordinator
@@ -129,13 +129,18 @@ mod tests {
 
         // Aggregate (also verifies the signature shares)
         let group_signature = frost_evm::aggregate(&signing_package, &signature_shares, &pubkeys)?;
-        let group_public = frost_evm::VerifyingKey::new(pubkeys.group_public().to_element());
+        let group_public = frost_evm::VerifyingKey::new(pubkeys.verifying_key().to_element());
 
         // Check that the threshold signature can be verified by the group public
         // key (the verification key).
         assert!(group_public.verify(message, &group_signature).is_ok());
 
         Ok((group_public, group_signature))
+    }
+
+    pub async fn client_from_config(config: BlockchainConfig) -> Result<MaybeWsEthereumClient> {
+        let url = config.node_uri.to_string();
+        MaybeWsEthereumClient::from_config(config, url.as_str()).await
     }
 
     #[tokio::test]
@@ -145,9 +150,9 @@ mod tests {
 
         let config = rosetta_config_ethereum::config("dev")?;
 
-        let env = Env::new("verify-sig", config.clone()).await?;
+        let env = Env::new("verify-sig", config.clone(), client_from_config).await?;
         let faucet = 100 * u128::pow(10, config.currency_decimals);
-        let wallet = env.ephemeral_wallet()?;
+        let wallet = env.ephemeral_wallet().await?;
         wallet.faucet(faucet).await?;
 
         let contract_address = deploy_verifier(&wallet).await?;
