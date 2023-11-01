@@ -2441,7 +2441,7 @@ dependencies = [
 [[package]]
 name = "frost-core"
 version = "0.7.0"
-source = "git+https://github.com/zcashfoundation/frost?branch=main#71c092532c90ea08f694186fc5d6c4355fff44a5"
+source = "git+https://github.com/dvc94ch/frost?branch=allow-constructing-identifiers#85e9cd3a65ac3f9e9e8db1b2d4024f9cb859c2cd"
 dependencies = [
  "byteorder",
  "const-crc32",
@@ -2471,7 +2471,7 @@ dependencies = [
 [[package]]
 name = "frost-rerandomized"
 version = "0.7.0"
-source = "git+https://github.com/zcashfoundation/frost?branch=main#71c092532c90ea08f694186fc5d6c4355fff44a5"
+source = "git+https://github.com/dvc94ch/frost?branch=allow-constructing-identifiers#85e9cd3a65ac3f9e9e8db1b2d4024f9cb859c2cd"
 dependencies = [
  "derive-getters",
  "document-features",
@@ -2482,7 +2482,7 @@ dependencies = [
 [[package]]
 name = "frost-secp256k1"
 version = "0.7.0"
-source = "git+https://github.com/zcashfoundation/frost?branch=main#71c092532c90ea08f694186fc5d6c4355fff44a5"
+source = "git+https://github.com/dvc94ch/frost?branch=allow-constructing-identifiers#85e9cd3a65ac3f9e9e8db1b2d4024f9cb859c2cd"
 dependencies = [
  "document-features",
  "frost-core",

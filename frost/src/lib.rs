@@ -1,8 +1,7 @@
-use frost_core::frost::round2::compute_signature_share;
-use frost_core::frost::{
-    compute_binding_factor_list, compute_group_commitment, derive_interpolating_value,
+use frost_core::round2::compute_signature_share;
+use frost_core::{
+    compute_binding_factor_list, compute_group_commitment, derive_interpolating_value, Challenge,
 };
-use frost_core::Challenge;
 use frost_secp256k1::keys::{KeyPackage, PublicKeyPackage};
 use frost_secp256k1::round1::SigningNonces;
 use frost_secp256k1::round2::SignatureShare;
