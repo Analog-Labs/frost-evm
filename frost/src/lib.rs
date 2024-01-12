@@ -76,9 +76,14 @@ pub mod round2 {
         // Compute the per-message challenge.
         // NOTE: here we diverge from frost by using a different challenge format.
         let group_public = VerifyingKey::new(key_package.verifying_key().to_element());
+        let msg: [u8; 32] = signing_package
+            .message()
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::IncorrectPackage)?;
         let challenge = Challenge::from_scalar(group_public.challenge(
             // VerifyingKey::message_hash(signing_package.message().as_slice()),
-            signing_package.message().as_slice(),
+            msg,
             group_commitment.to_element(),
         ));
 
