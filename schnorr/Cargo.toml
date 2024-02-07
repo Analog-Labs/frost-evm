@@ -2,6 +2,9 @@
 name = "schnorr-evm"
 version = "0.1.0"
 edition = "2021"
+description = "schnorr signatures optimized for evm"
+repository = "https://github.com/Analog-Labs/frost-evm"
+license = "Apache-2.0 OR MIT"
 
 [features]
 default = ["std"]

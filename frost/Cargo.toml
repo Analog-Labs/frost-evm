@@ -2,6 +2,9 @@
 name = "frost-evm"
 version = "0.1.0"
 edition = "2021"
+description = "frost signatures optimized for evm"
+repository = "https://github.com/Analog-Labs/frost-evm"
+license = "Apache-2.0 OR MIT"
 
 [features]
 serde = ["frost-core/serde", "frost-secp256k1/serde", "schnorr-evm/serde"]
