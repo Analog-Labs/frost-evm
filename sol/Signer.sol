@@ -35,7 +35,7 @@ contract Signer {
         (uint256 rx, uint256 ry) = math.publicKey(nonce);
         address r = math.point_hash(rx, ry);
         uint256 c = _challenge(hash, r);
-        uint256 z = nonce + mulmod(c, s, verifier.Q());
+        uint256 z = addmod(nonce, mulmod(c, s, verifier.Q()), verifier.Q());
         return (c, z);
     }
 
