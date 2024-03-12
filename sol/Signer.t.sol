@@ -11,8 +11,7 @@ contract FuzzSchnorr is Test {
         vm.assume(nonce != 0);
         vm.assume(message != 0);
         Signer signer = new Signer(secret);
-        Schnorr verifier = new Schnorr();
         (uint256 e, uint256 s) = signer.signPrehashed(message, nonce);
-        assert(verifier.verify(signer.yParity(), signer.xCoord(), message, e, s));
+        assert(Schnorr.verify(signer.yParity(), signer.xCoord(), message, e, s));
     }
 }
