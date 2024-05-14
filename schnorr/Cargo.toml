@@ -1,6 +1,6 @@
 [package]
 name = "schnorr-evm"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "schnorr signatures optimized for evm"
 repository = "https://github.com/Analog-Labs/frost-evm"
