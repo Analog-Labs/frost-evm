@@ -2,7 +2,6 @@ use k256::elliptic_curve::hash2curve::{hash_to_field, ExpandMsgXmd};
 use k256::elliptic_curve::sec1::FromEncodedPoint;
 use k256::elliptic_curve::PrimeField;
 use k256::{AffinePoint, EncodedPoint, Scalar};
-use rand_core::OsRng;
 use sha2::Sha256;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,10 +30,10 @@ pub type Commitment = [[u8; 33]];
 /// Context string from the ciphersuite in the [spec].
 ///
 /// [spec]: https://www.ietf.org/archive/id/draft-irtf-cfrg-frost-14.html#section-6.5-1
-const CONTEXT_STRING: &str = "FROST-secp256k1-SHA256-v1";
+const ID_CONTEXT_STRING: &str = "FROST-secp256k1-SHA256-v1id";
+const DKG_CONTEXT_STRING: &str = "FROST-secp256k1-SHA256-v1dkg";
 
-fn hash_to_scalar(ctx: &str, msg: &[u8]) -> Scalar {
-    let domain = CONTEXT_STRING.to_owned() + ctx;
+fn hash_to_scalar(domain: &str, msg: &[u8]) -> Scalar {
     let mut u = [Scalar::ZERO];
     hash_to_field::<ExpandMsgXmd<Sha256>, Scalar>(&[msg], &[domain.as_bytes()], &mut u)
         .expect("should never return error according to error cases described in ExpandMsgXmd");
@@ -52,13 +51,13 @@ pub fn verify_proof_of_knowledge(
     let pk = commitment[0];
     let r: [u8; 33] = pok[..33].try_into().unwrap();
     let z: [u8; 32] = pok[33..].try_into().unwrap();
-    let id = hash_to_scalar("id", peer);
+    let id = hash_to_scalar(ID_CONTEXT_STRING, peer);
 
     let mut preimage = [0; 98];
     preimage[..32].copy_from_slice(&id.to_bytes());
     preimage[32..65].copy_from_slice(&pk);
     preimage[65..].copy_from_slice(&r);
-    let c = hash_to_scalar("dkg", &preimage[..]);
+    let c = hash_to_scalar(DKG_CONTEXT_STRING, &preimage[..]);
 
     let pk = EncodedPoint::from_bytes(pk).map_err(|_| Error::InvalidCommitment)?;
     let pk = Option::<AffinePoint>::from(AffinePoint::from_encoded_point(&pk))
@@ -84,7 +83,7 @@ pub fn construct_proof_of_knowledge(
         frost_core::Identifier::derive(peer)?,
         coefficients,
         &frost_core::keys::VerifiableSecretSharingCommitment::deserialize(commitment.to_vec())?,
-        OsRng,
+        rand_core::OsRng,
     )?;
     Ok(sig.serialize())
 }
