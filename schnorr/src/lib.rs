@@ -8,6 +8,8 @@ use k256::{AffinePoint, EncodedPoint, NonZeroScalar, ProjectivePoint, Scalar};
 use rand_core::{CryptoRng, RngCore};
 use sha3::Digest;
 
+pub mod proof_of_knowledge;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
     InvalidSecretKey,
