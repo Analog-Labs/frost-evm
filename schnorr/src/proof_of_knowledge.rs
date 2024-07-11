@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_verify() {
-        let rng = &mut OsRng;
+        let rng = &mut rand_core::OsRng;
         let peer = b"some peer id";
         let n = 3;
         let mut coefficients = Vec::with_capacity(n);
